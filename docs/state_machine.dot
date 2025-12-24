@@ -1,0 +1,51 @@
+// 状态机关键转换图 — 自动生成
+digraph state_machine {
+    rankdir=LR;
+    node [shape=box, style=rounded, fontsize=12];
+
+    STATE_IDLE [label="STATE_IDLE\n(锁屏/待机)"];
+    STATE_DEBUG [label="STATE_DEBUG\n(调试)"];
+    STATE_READING [label="STATE_READING\n(阅读)"];
+    STATE_READING_QUICK_MENU [label="STATE_READING_QUICK_MENU\n(快速菜单)"];
+    STATE_HELP [label="STATE_HELP\n(帮助)"];
+    STATE_INDEX_DISPLAY [label="STATE_INDEX_DISPLAY\n(书签/索引)"];
+    STATE_TOC_DISPLAY [label="STATE_TOC_DISPLAY\n(目录)\n(TOC)"];
+    STATE_MENU [label="STATE_MENU\n(菜单)"];
+    STATE_MAIN_MENU [label="STATE_MAIN_MENU\n(主菜单)"];
+    STATE_2ND_LEVEL_MENU [label="STATE_2ND_LEVEL_MENU\n(二级菜单)"];
+    STATE_WIRE_CONNECT [label="STATE_WIRE_CONNECT\n(串口/有线连接)"];
+    STATE_USB_CONNECT [label="STATE_USB_CONNECT\n(USB MSC)"];
+    STATE_SHUTDOWN [label="STATE_SHUTDOWN\n(关机)"];
+
+    // 典型触发转换（带标签）
+    STATE_IDLE -> STATE_READING [label="MSG_DOUBLE_TOUCH_PRESSED\n(双击解锁)"];
+    STATE_READING -> STATE_MENU [label="touch -> 'MENU'\n(handleReadingTouch 返回)"];
+    STATE_READING -> STATE_TOC_DISPLAY [label="touch top-left/top-right\n或 hasTOC -> show_toc_ui"];
+    STATE_READING -> STATE_INDEX_DISPLAY [label="touch left/top -> show_tag_ui"];
+    STATE_READING -> STATE_READING_QUICK_MENU [label="touch bottom-right -> quick menu"];
+    STATE_READING -> STATE_IDLE [label="MSG_TIMER_MIN_TIMEOUT\n(shutCnt 达阈值)\n-> show_lockscreen"];
+
+    STATE_MENU -> STATE_IDLE [label="MSG_TIMER_MIN_TIMEOUT\n(shutCnt 达阈值)"];
+    STATE_MENU -> STATE_SHUTDOWN [label="menu power button / confirm"];
+
+    STATE_IDLE -> STATE_SHUTDOWN [label="MSG_TIMER_MIN_TIMEOUT\n(长期 idle, 无索引)"];
+
+    // 菜单层级示意
+    STATE_MAIN_MENU -> STATE_2ND_LEVEL_MENU [label="select item -> open 2nd level"];
+    STATE_2ND_LEVEL_MENU -> STATE_MAIN_MENU [label="back / done"];
+
+    // 连接相关
+    STATE_IDLE -> STATE_WIRE_CONNECT [label="wire connect event"];
+    STATE_IDLE -> STATE_USB_CONNECT [label="usb connect event"];
+    STATE_WIRE_CONNECT -> STATE_IDLE [label="disconnect / done"];
+    STATE_USB_CONNECT -> STATE_IDLE [label="usb disconnected / unmount"];
+
+    // 关机
+    STATE_SHUTDOWN -> STATE_IDLE [label="(rare) abort / wake"];
+
+    // 辅助说明节点
+    autosave [shape=note, label="自动保存/自动书签:\ninsertAutoTagForFile() 在进入 IDLE/SHUTDOWN 前调用"];
+    STATE_READING -> autosave [style=dashed, arrowhead=none];
+    STATE_IDLE -> autosave [style=dashed, arrowhead=none];
+    STATE_MENU -> autosave [style=dashed, arrowhead=none];
+}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>欢迎 · ReadPaper</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+</head>
+
+<body>
+    <div data-include="partials/header.html"></div>
+
+    <main role="main" class="container" aria-labelledby="page-title">
+        <div class="row">
+            <div class="col-12">
+                <h1 id="page-title" class="is-hidden">欢迎使用 ReadPaper</h1>
+                <div id="device-info" class="muted" ></div>
+</p>
+                <p class="text-grey">出于个人兴趣开发的轻量级阅读固件。<span id="connection-status" class="text-primary"></span></p>
+                
+                <!-- 使用与其他页面相同的 previewer 样式 -->
+                <div id="previewer" class="frontpage">
+                    <img src="../assets/cover.png" alt="Cover" class="preview-image" />
+                </div>
+
+                <!--div style="margin-top:1rem;">
+                    <a href="main.html" class="button primary">进入主页面</a>
+                    <a href="filemanager.html" class="button outline">文件管理</a>
+                </div-->
+            </div>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toasts"></div>
+
+    <div data-include="partials/footer.html"></div>
+
+    <script src="include-partials.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>文本处理 - ReadPaper Utils</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+    <link rel="icon" href="../../assets/favicon.png">
+    <!-- styles moved to css/main.scss (main.scss -> main.css) -->
+</head>
+
+<body>
+    <div data-include="partials/header.html"></div>
+
+    <main role="main" class="container" aria-labelledby="page-title">
+        <div class="row">
+            <div class="leftpanel col col-12">
+                <div class="panel">
+                    <h5 class="bg-light">文件选择</h5>
+                    <div class="field">
+                        <label for="fileInput">选择本地书籍（.txt，可多选）</label>
+                        <div class="flex-row gap-small align-center">
+                            <input id="fileInput" type="file" accept=".txt" class="col-8" multiple />
+                            <button id="clearList" class="button col-4">清空列表</button>
+                        </div>
+                        <div class="field mt-05">
+                            <small
+                                class="muted">支持拖拽到下方区域或通过“选择文件”添加。输出文件命名为：<code>&lt;原文件名（去掉后缀）&gt;.txt</code>，在浏览器中下载。</small>
+                        </div>
+                        <div id="dropArea" class="mt-05"
+                            style="border:2px dashed #ccc; padding:12px; border-radius:6px; text-align:center;">
+                            将文件拖拽到此处或点击选择文件</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <div class="row" style="margin-top:20px;">
+            <h5 class="bg-light col-12">参数配置</h5>
+            <div id="optionsArea" class="col-12">
+                <div class="field">
+                    <label><input type="checkbox" id="opt_trim_leading" /> 行首顶格</label>
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" id="opt_remove_extra_blank" /> 去除多余空行</label>
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" id="opt_generate_index" /> 目录生成</label>
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" id="opt_idx_diag" /> 启用 idx 字节校验（调试，可能较慢）</label>
+                    <div><small class="muted">默认关闭。仅在需要定位目录位置偏差时启用。</small></div>
+                </div>
+                <div id="indexOptions" class="mt-05" style="padding-left:12px;">
+                    <div class="field">
+                        <label>目录样式1 (优先, 默认): <input type="text" id="opt_index_regex1" class="col-12" value="/(?:^|\\s+)第.*章.*/u" /></label>
+                    </div>
+                    <div class="field">
+                        <label>目录样式2: <input type="text" id="opt_index_regex2" class="col-12" value="" placeholder="可填正则，如：^CHAPTER\\s+\\d+" /></label>
+                    </div>
+                    <div class="field">
+                        <label>目录样式3: <input type="text" id="opt_index_regex3" class="col-12" value="" placeholder="备用正则" /></label>
+                    </div>
+                    <div class="field">
+                        <small class="muted">当勾选后，会按照样式1/2/3的优先级试图匹配目录行，并生成同名 <code>.idx</code> 文件。</small>
+                    </div>
+                </div>
+                <!-- 全局预览按钮已移除；每个文件的“开始”按钮改为“预览”以显示针对性预览 -->
+            </div>
+        </div>
+        <div class="row mt-05">
+            <h5 class="bg-light col-12">处理统计</h5>
+            <div class="col-12" id="convert-info"><!-- 预览区：显示预览或示例 --></div>
+        </div>
+
+        <div id="fileList" class="row" style="margin-top:12px;"></div>
+
+        <div id="buttonGrp" class="row"
+            style="margin-top:20px; justify-content: space-around;background-color:#f3f3f6;padding-top:10px;    border: 1px dotted black; ">
+            <!-- 使用右侧的 开始 / 取消 按钮 (#generateBtn / #cancelBtn) 来控制批处理 -->
+            <button id="generateBtn" class="button primary col-6 col-5-lg pull-left">开始</button>
+            <button id="cancelBtn" class="button col-5-lg col-6 pull-right" disabled>移除所有</button>
+        </div>
+
+
+        <div class="row">
+            <div class="col-12 mt-075">
+                <progress id="progressBar" value="0" max="100" class="progress-full"></progress>
+            </div>
+        </div>
+
+        <div class="row">
+            <summary class="summary-strong col-12 bg-light">生成日志</summary>
+        </div>
+        </div>
+        <details class="panel">
+            <pre id="log" class="log log-pre" aria-live="polite"></pre>
+        </details>
+    </main>
+
+    <div data-include="partials/footer.html"></div>
+
+    <script src="include-partials.js"></script>
+    <script src="text_processor.js"></script>
+</body>
+
+</html>

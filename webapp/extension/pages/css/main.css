@@ -1,0 +1,1017 @@
+@charset "UTF-8";
+/* ========================================
+   版本更新通知样式
+   ======================================== */
+.version-update-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+          backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.version-update-overlay.show {
+  opacity: 1;
+}
+.version-update-overlay.show .version-update-modal {
+  transform: scale(1);
+}
+
+.version-update-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 480px;
+  width: 90%;
+  max-height: 85vh;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.version-update-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f04f0f 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+.version-update-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.version-update-body {
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(85vh - 180px);
+}
+
+.version-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 8px;
+}
+
+.version-label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.version-number {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #667eea;
+  font-family: "Courier New", monospace;
+}
+
+.update-content {
+  margin-bottom: 1.5rem;
+}
+.update-content h3 {
+  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-weight: 600;
+}
+
+.update-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.update-list li {
+  padding: 0.75rem 0;
+  color: #555;
+  line-height: 1.6;
+  border-bottom: 1px solid #f0f0f0;
+}
+.update-list li:last-child {
+  border-bottom: none;
+}
+
+.update-tip {
+  text-align: center;
+  color: #888;
+  font-size: 0.9rem;
+  margin: 1.5rem 0 0 0;
+  font-style: italic;
+}
+
+.version-update-footer {
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #e8e8e8;
+  text-align: center;
+}
+.version-update-footer .button {
+  min-width: 120px;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.version-update-footer .button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .version-update-modal {
+    background: #2d3748;
+    color: #e2e8f0;
+  }
+  .version-update-header {
+    background: linear-gradient(135deg, #4c51bf 0%, #553c9a 100%);
+  }
+  .version-badge {
+    background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+  }
+  .version-label {
+    color: #cbd5e0;
+  }
+  .version-number {
+    color: #90cdf4;
+  }
+  .update-content h3 {
+    color: #e2e8f0;
+  }
+  .update-list li {
+    color: #cbd5e0;
+    border-bottom-color: #4a5568;
+  }
+  .update-tip {
+    color: #a0aec0;
+  }
+  .version-update-footer {
+    border-top-color: #4a5568;
+  }
+}
+@media (max-width: 600px) {
+  .version-update-modal {
+    width: 95%;
+    max-height: 90vh;
+  }
+  .version-update-header {
+    padding: 1.25rem 1.5rem;
+  }
+  .version-update-header h2 {
+    font-size: 1.25rem;
+  }
+  .version-update-body {
+    padding: 1.5rem;
+  }
+  .version-badge {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .version-update-footer {
+    padding: 1.25rem 1.5rem;
+  }
+  .version-update-footer .button {
+    width: 100%;
+  }
+}
+:root {
+  --color-primary: #f04f0f;
+  /* brand color */
+  --grid-maxWidth: 120rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.flex-row {
+  display: flex;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.gap-small {
+  gap: 0.5rem;
+}
+
+.gap-medium {
+  gap: 0.75rem;
+}
+
+.flex-33 {
+  flex: 0 0 33%;
+}
+
+.flex-50 {
+  flex: 0 0 50%;
+}
+
+/* modal confirm styles (used by filemanager.js showConfirm) */
+.fm-confirm-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fm-confirm-box {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.fm-confirm-box .button {
+  min-width: 72px;
+}
+
+.mt-025 {
+  margin-top: 0.25rem;
+}
+
+.mt-05 {
+  margin-top: 0.5rem;
+}
+
+.mt-075 {
+  margin-top: 0.75rem;
+}
+
+.ml-04 {
+  margin-left: 0.4rem;
+}
+
+.summary-strong {
+  font-weight: 600;
+}
+
+.muted {
+  color: #666;
+}
+
+.progress-full {
+  width: 100%;
+}
+
+/* Progress bar: remove rounded corners across browsers */
+progress,
+#progressBar {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+  border-radius: 0;
+  overflow: hidden;
+  background: #eee;
+}
+
+/* WebKit / Blink: bar and value */
+progress::-webkit-progress-bar,
+#progressBar::-webkit-progress-bar {
+  background: #eee;
+  border-radius: 0;
+}
+
+progress::-webkit-progress-value,
+#progressBar::-webkit-progress-value {
+  background: #4caf50;
+  /* keep the default fill color */
+  border-radius: 0;
+}
+
+/* Firefox */
+progress::-moz-progress-bar,
+#progressBar::-moz-progress-bar {
+  background: #4caf50;
+  border-radius: 0;
+}
+
+.log-pre {
+  height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+}
+
+.log {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.col-12 {
+  width: 100%;
+}
+
+/* Note: compile this SCSS to css/main.css for the page to pick up styles. */
+/* Previewer: fixed height and image fit (moved from inline <style> in main.html) */
+#previewer {
+  height: 160px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1px solid #eee;
+}
+#previewer.frontpage {
+  background: #eae0d2;
+}
+
+#previewer .preview-image {
+  -o-object-fit: contain;
+     object-fit: contain;
+  width: 60%;
+}
+
+/* White slider control: small +/- buttons for fine adjustments */
+.white-control {
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.white-control.is-disabled {
+  opacity: 0.5;
+}
+
+.white-control .button.is-small {
+  padding: 0.25rem 0.5rem;
+  min-width: 2rem;
+  text-align: center;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+#edcThresholdControls .threshold-control {
+  width: 100%;
+}
+#edcThresholdControls input[type=range] {
+  width: 100%;
+}
+
+/* Reduce rounded corners for controls to match the flat progress bar aesthetic */
+.white-control .button.is-small.outline {
+  border-radius: 2px;
+}
+
+/* Toast/Card notifications (transient) using chota card styles */
+.toast-container {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 9999;
+  max-width: 320px;
+}
+
+.toast-card {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  animation: toast-in 180ms ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+body {
+  font-size: 14px;
+}
+body a.homepage {
+  display: none;
+  left: 5px;
+  top: 5px;
+}
+body .nav {
+  align-items: flex-end;
+}
+body .nav a.brand {
+  font-size: 16px;
+  width: 200px;
+  margin-left: 20px;
+  font-weight: bold;
+}
+body .nav a.brand img {
+  max-height: 80px;
+  margin-top: 20px;
+}
+body .nav .mainnav {
+  align-items: flex-end;
+}
+body .nav .mainnav .tabs {
+  height: 50px;
+}
+body .nav .mainnav .tabs a {
+  width: 100px;
+  font-size: 14px;
+}
+body button.button {
+  font-size: 14px;
+}
+body button.button.toolbar {
+  font-size: 12px !important;
+  width: 150px !important;
+}
+body label {
+  font-weight: bold;
+}
+
+/* Styles moved from filemanager.html inline <style> (kept here so pages can share) */
+.file-table thead th {
+  white-space: nowrap;
+}
+
+.file-actions button,
+.file-actions a {
+  margin-right: 0.25rem;
+}
+
+.upload-box {
+  border: 1px dashed var(--grey);
+  padding: 1rem;
+  border-radius: 0.25rem;
+  background: var(--light);
+}
+
+.dragover {
+  background: #fffceb;
+}
+
+.badge-current {
+  background: var(--primary);
+  color: #fff;
+  padding: 0 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+}
+
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.toast {
+  background: #222;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-size: 1rem;
+  /* increased for better readability */
+}
+
+.pagination {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Per-page info label/value alignment (moved from main.html inline style) */
+.info-row {
+  /* 限制 value 最大宽度为 100px，超出时截断为省略号；min-width:0 允许 flex 项按需收缩 */
+}
+.info-row .info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.info-row .info-label {
+  width: 6.5rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.info-row .info-value {
+  flex: 1;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#retryBtn {
+  margin-left: 20px;
+}
+
+/* Smooth collapse for index options in text_processor page (top-level so it applies on all widths) */
+#indexOptions {
+  overflow: hidden;
+  /* large enough max-height to contain the content; transition will animate between 0 and this */
+  max-height: 800px;
+  transition: max-height 220ms ease, opacity 180ms ease, padding 180ms ease, margin 180ms ease;
+}
+
+/* collapsed state: shrink to zero height and hide visually */
+#indexOptions.collapsed {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  pointer-events: none;
+}
+
+/* Convert summary: nicer, more elegant table styling */
+.convert-summary {
+  padding: 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid #e6f4fb;
+  box-shadow: 0 6px 18px rgba(18, 35, 51, 0.04);
+  color: #123;
+}
+.convert-summary .convert-summary-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #0c2540;
+}
+.convert-summary .convert-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: transparent;
+  /* Truncate long file names with ellipsis */
+  /* also apply to inline truncate wrapper */
+}
+.convert-summary .convert-summary-table th,
+.convert-summary .convert-summary-table td {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+.convert-summary .convert-summary-table th {
+  text-align: left;
+  color: #546675;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.convert-summary .convert-summary-table td {
+  text-align: left;
+}
+.convert-summary .convert-summary-table td.remark-cell {
+  text-align: left;
+  color: #304a5f;
+}
+.convert-summary .convert-summary-table .col-index {
+  width: 48px;
+  text-align: center;
+}
+.convert-summary .convert-summary-table .col-name {
+  min-width: 180px;
+}
+.convert-summary .convert-summary-table td.col-name,
+.convert-summary .convert-summary-table th.col-name {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.convert-summary .convert-summary-table .truncate {
+  display: inline-block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.convert-summary .convert-summary-table .col-size {
+  text-align: right;
+  white-space: nowrap;
+}
+.convert-summary .convert-summary-table .col-remark {
+  text-align: left;
+}
+@media (max-width: 720px) {
+  .convert-summary .convert-summary-table .col-index,
+  .convert-summary .convert-summary-table th.col-index,
+  .convert-summary .convert-summary-table .col-size,
+  .convert-summary .convert-summary-table th.col-size {
+    display: none;
+  }
+  .convert-summary .convert-summary-table .col-name,
+  .convert-summary .convert-summary-table th.col-name,
+  .convert-summary .convert-summary-table .col-remark,
+  .convert-summary .convert-summary-table th.col-remark {
+    display: table-cell;
+    width: auto;
+  }
+  .convert-summary .convert-summary-table tbody tr {
+    border-bottom: 1px solid #e5ecf2;
+  }
+}
+.convert-summary .convert-summary-table tbody tr {
+  border-bottom: 1px solid rgba(9, 50, 84, 0.04);
+  transition: background 140ms ease;
+}
+.convert-summary .convert-summary-table tbody tr:hover {
+  background: rgba(230, 245, 255, 0.6);
+}
+.convert-summary .convert-summary-table tbody tr:last-child {
+  border-bottom: none;
+}
+.convert-summary .convert-summary-table .num {
+  display: inline-block;
+  min-width: 6ch;
+  text-align: right;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: rgba(240, 79, 0, 0.06);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.convert-summary.convert-summary-small,
+.convert-summary .convert-summary-small {
+  font-size: 12px;
+  color: #456;
+  margin-top: 6px;
+}
+.convert-summary .convert-summary-footer {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5b6a79;
+  font-weight: 500;
+}
+.convert-summary .convert-summary-details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.convert-summary .convert-summary-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #304a5f;
+}
+.convert-summary .convert-summary-details ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  list-style: disc;
+}
+.convert-summary .convert-summary-details li {
+  margin-bottom: 4px;
+}
+
+.queue-row {
+  align-items: center;
+}
+
+.queue-progress {
+  margin-top: 6px;
+}
+
+.status-badge {
+  display: inline-block;
+  min-width: 64px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  background: #edf1f5;
+  color: #4a5a6a;
+}
+
+.status-badge[data-status=running] {
+  background: #ffe9c6;
+  color: #865210;
+}
+
+.status-badge[data-status=success] {
+  background: #e4f6ea;
+  color: #1f7a3d;
+}
+
+.status-badge[data-status=error] {
+  background: #fde0e0;
+  color: #a32121;
+}
+
+.status-badge[data-status=cancelled] {
+  background: #f2f3f5;
+  color: #666d73;
+}
+
+.status-badge[data-status=pending] {
+  background: #edf1f5;
+  color: #4a5a6a;
+}
+
+.progress-compact {
+  width: 100%;
+  height: 6px;
+}
+
+#dropArea.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* disabled-until-heartbeat: visually disable a tab until heartbeat confirms online */
+.disabled-until-heartbeat {
+  opacity: 0.5;
+  pointer-events: auto;
+  /* keep pointer events so delegated click handler can intercept */
+  cursor: not-allowed;
+}
+
+/* Responsive: hide the right-side main navigation on small screens (<600px) */
+@media (max-width: 600px) {
+  .convert-summary-table .col-name .truncate,
+  .convert-summary-table .col-remark .truncate {
+    max-width: 20vw;
+    /* reasonable cap on small screens */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #buttonGrp .button,
+  .file-item .button {
+    width: 76px;
+  }
+  #downloadToolbar .button {
+    width: 110px;
+  }
+  .badge-item {
+    display: none;
+  }
+  strong {
+    max-width: 200px;
+  }
+  .file-item .muted {
+    display: none;
+  }
+  .nav-right.mainnav {
+    display: none !important;
+  }
+  /* Optional: make left nav take full width if needed */
+  .nav-left.mainnav {
+    flex: 1 1 100%;
+  }
+  /* Fix tabs display on small screens to prevent first item being hidden */
+  body .nav .mainnav .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    height: auto;
+    gap: 0.25rem;
+  }
+  body .nav .mainnav .tabs a {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: -moz-fit-content;
+    min-width: fit-content;
+    padding: 0.5rem 0.75rem;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  /* Ensure nav container doesn't overflow */
+  body .nav {
+    overflow: visible;
+  }
+  body .container {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  /* Force file table to stay within screen width on small screens */
+  .file-table {
+    width: 100% !important;
+    max-width: 100vw;
+    table-layout: fixed;
+    /* respect column widths and prevent overflow */
+    display: table;
+    /* ensure table rendering */
+  }
+  .file-table td {
+    /* allow long unbroken names (e.g. generated font filenames) to wrap or break */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+  }
+  /* Name column: truncate with ellipsis to prevent overflow */
+  .file-table td:nth-child(2) {
+    max-width: 0;
+    /* force ellipsis behavior in fixed layout */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Hide "当前" column (4th column) on small screens to save space */
+  .file-table thead th:nth-child(4),
+  .file-table tbody td:nth-child(4) {
+    display: none;
+  }
+  /* Make action buttons smaller on mobile to fit better */
+  .file-actions button,
+  .file-actions a {
+    font-size: 11px !important;
+    padding: 0.25rem 0.4rem !important;
+    min-width: auto !important;
+    line-height: 1.2 !important;
+    height: auto !important;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  /* Ensure button and link have same appearance */
+  .file-actions a.button {
+    text-decoration: none;
+  }
+  /* Ensure container doesn't allow horizontal overflow */
+  .file-table,
+  .file-table * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+.file-item .row {
+  background-color: #e6f4fb;
+}
+
+/* Styles moved from epub_convertor.html <style> and inline attributes */
+/* Refined button styles for mobile: smaller, rounded, compact */
+#buttonGrp .button,
+#downloadToolbar .button,
+.file-item .button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+  width: 88px;
+  min-width: 0;
+}
+
+#downloadArea .panel {
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+}
+
+#downloadArea .panel a {
+  text-decoration: none;
+  color: #0b5;
+}
+
+/* Make file list items more compact on narrow screens */
+@media (max-width: 600px) {
+  .queue-row .col-7 {
+    flex: 0 0 60%;
+  }
+  .queue-row .col-5 {
+    flex: 0 0 40%;
+  }
+  .queue-progress {
+    margin-top: 6px;
+  }
+  .small-button {
+    display: flex;
+    justify-content: center;
+  }
+  .small-button a {
+    font-size: small;
+  }
+}
+/* Truncate long filenames in file list to 60% width and prevent wrapping */
+.file-item .col-7 strong {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* Truncate filenames in convert-summary table (single-line ellipsis) */
+.convert-summary-table .col-name,
+.convert-summary-table .col-output,
+.convert-summary-table .col-remark {
+  max-width: 40vw;
+  /* reasonable cap on small screens */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Download area panels layout */
+#downloadArea .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#downloadArea .panel a {
+  display: inline-block;
+  max-width: calc(100% - 140px);
+  /* reserve space for action buttons on the right */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Also ensure strong (group title) and anchors never exceed 60% of container and are truncated */
+#downloadArea .panel strong,
+#downloadArea .panel a {
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* If panel has a list of items, ensure each line keeps anchor and actions on single line when possible */
+#downloadArea .panel > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Make downloadToolbar buttons slightly larger for usability */
+#downloadToolbar .button {
+  width: 120px;
+}
+
+/* Page specific inline replacements */
+#dropArea {
+  border: 2px dashed #ccc;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.mt-12 {
+  margin-top: 12px;
+}
+
+#downloadToolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+
+#buttonGrp {
+  margin-top: 20px;
+  justify-content: space-around;
+  background-color: #f3f3f6;
+  padding-top: 10px;
+  border: 1px dotted black;
+}
+
+/* book list name truncation */
+.book-list-name {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.download-button {
+  /* small modifier for download action */
+}
+
+.download-link {
+  text-decoration: none;
+  color: #0b5;
+}
+
+/* download row underline (black dotted) */
+.download-row {
+  border-bottom: 1px dotted #000;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}/*# sourceMappingURL=main.css.map */

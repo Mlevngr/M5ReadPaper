@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>关于 · ReadPaper Utils</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+</head>
+
+<body>
+    <div data-include="partials/header.html"></div>
+
+    <main role="main" class="container" aria-labelledby="page-title">
+
+
+
+        <div class="row">
+            <div class="col col-12">
+                <h5 class="bg-light">关于 ReadPaper</h5>
+                <div class="panel">
+                    <div class="card">
+                        <div class="card-body">
+                            <h4 class="text-primary">Y.A.P.T.R. — Yet Another PaperS3 Text Reader</h4>
+                            <p class="muted">出于个人兴趣开发的轻量级阅读固件，针对 PaperS3 平台的文本阅读体验进行了优化。</p>
+                            <h5>快速上手</h5>
+                            <ul>
+                                <li>双击解锁</li>
+                                <li>左右翻页</li>
+                                <li>点击中心区域显示菜单</li>
+                                <li>支持180度自动旋转（并且会配合修改翻页手）</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>字体与显示</h4>
+                                <p>为了提高对生僻字的支持并节省存储空间，本项目使用了进一步压缩的字体（.bin）。压缩会带来视觉损耗，建议通过工具页面的预览功能调校阈值与尺寸以达到最佳效果。</p>
+                                <p>当前支持了ReadPaper和EDC Book两种固件的bin文件字体生成，请在页面通过下拉框选择类型生成。</p>
+                                <h5>仓库与工具</h5>
+                                <p>更多说明、字体：</p>
+                                <p><a href="https://github.com/shinemoon/releaseReadPaper" target="_blank"
+                                        rel="noopener noreferrer">https://github.com/shinemoon/releaseReadPaper</a></p>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>文件管理</h4>
+                                <p>推荐1.3之后使用扩展进行文件管理，网页直连后续不一定能够及时更新了；而用于支持前端或者工具开发的API文档参见:</p>
+                                <p><a href="https://github.com/shinemoon/releaseReadPaper/blob/main/WIFI_HTTP_API.md"
+                                        target="_blank" rel="noopener noreferrer">ReaderPaper — HTTP API（Web 前端
+                                        开发者参考）</a></p>
+
+                            </div>
+                        </div>
+                    </div>
+
+
+
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>目录与书签</h4>
+                                <p>目录支持是依靠与书籍同名的.idx文件来实现，请将由工具生成的idx文件放置在book目录下即可。</p>
+                                <p>书签自动书签（通常在书籍切换，状态切换时自动生成，占据第一个位置），手动切换（阅读中点击屏幕右上角）组成，一共支持十个书签位，先进先出（自动书签不受影响）。</p>
+                                <p>目录和书签都仅对分页完成部分可支持跳转，未分页完成前虽然可见书签或者目录，但是不支持跳转。</p>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>壁纸</h4>
+                                <p>壁纸请上传到“锁屏”目录，对应SD的/image，按照如下优先级选择锁屏图案:</p>
+                                <ul>
+                                    <li>与当前阅读书籍的同名的图片(png/jpg/jpeg/bmp);</li>
+                                    <li>'default.png';</li>
+                                    <li>系统自带;</li>
+                                </ul>
+                                <p>PS：支持透明png。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>Q&A</h4>
+                                <p class="bg-light">什么时候会触发书籍重新索引？</p>
+                                <p class="">新打开或者配置变化导致分页会事实上改变的时候，包括：</p>
+                                <ul>
+                                    <li>新打开书籍;</li>
+                                    <li>切换横排竖排;</li>
+                                    <li>修改了字体<b>size</b>;</li>
+                                    <li>手动菜单选择重建索引;</li>
+                                </ul>
+                                <p class="text-dark">提示：</p>
+                                <ul>
+                                    <li>索引期间可能有偶尔延迟现象，如果可能建议稍候等书籍索引完成，索引期间，翻页、跳转（包括书签跳转）都只能在已经完成索引的范围内操作，索引未覆盖的部分的书签会显示灰色数字；
+                                    </li>
+                                    <li>索引期间，最好避免WIFI/USB连接。虽然已经尽力做了保护，（但是...）实测依然有偶发冲突的风险;</li>
+                                    <li>如果不想重建某本书的索引，例如是在读另一本书的时候切换了字体，只要确保切回该书时，配置也改回去即可，因为触发重索引的会是在打开书籍的时刻检测和触发的。</li>
+                                </ul>
+
+                                <p class="bg-light">手机上能使用这个工具吗？</p>
+                                <p class="">只要是能安装扩展的安卓浏览器，理论上就可以；推荐Firefox 安卓版。</p>
+
+                                <p class="bg-light">USB连接为什么那么久？</p>
+                                <p class="">
+                                    这个属于本人技术水平有限，一直没能解决usbmsc的初始枚举的速度问题，但是当时加入主要是为了万一电脑没有无线网卡的时候依然可以应急调试的需求；从应用角度，USB直连其实不如网页方便，只能作为实验特性供自己临时救急。一旦初始化结束，连接还是比较稳定的，但是速率其实还比不上Wifi管理。
+                                </p>
+                                <p class="">如前所述，使用USB时，尽量避免在索引进行时并行。</p>
+
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>使用建议</h4>
+                                <ul>
+                                    <li>遇到兼容性问题，可先尝试恢复出厂（仅清理配置、书签与索引，不删除书籍/字体）。</li>
+                                    <li>配置与记录保存在 SD 卡，可自由尝试其它固件。</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>致谢</h4>
+                                <p>感谢 M5Stack 的优雅硬件设计；特别感谢 <a
+                                        href="https://space.bilibili.com/111996924?spm_id_from=333.337.0.0">@梦西游啊游</a>
+                                    的开创性工作为我带来的启发。</p>
+                                <p>某种意义上他的EDCBook是对主流阅读器厂商们近年一味力大砖飞，靠堆配置，而不是沉下心来真的改进“读书”体验的趋势的一种有力的回答。</p>
+                                <p class="muted">作者：@shinemoon</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-05">
+                        <div class="card">
+                            <div class="card-body">
+                                <h4>版本历史</h4>
+                                <ul>
+                                    <li>V1.6 - 一些底层重构以及Bug修正</li>
+                                    <li>V1.5 - UI调整 / Bug修正 /字体调整</li>
+                                    <li>V1.4</li>
+                                    <ul>
+                                        <li>V1.4.4 — 字体调整优化</li>
+                                        <li>V1.4.3 — 增加少量显示选项/ 调整UI / 自动翻页 </li>
+                                        <li>V1.4.2 — 竖排显示优化 / 其他一些样式优化 /其他问题的修正</li>
+                                        <li>V1.4 — 浏览器插件支持Epub文件转换和目录生成/ 支持目录浏览 </li>
+                                    </ul>
+                                    <li>V1.3 — 浏览器插件支持管理及字体生成 / API支持</li>
+                                    <li>V1.2</li>
+                                    <ul>
+                                        <li>V1.2.10 — 简单书签管理功能 / 自动旋转</li>
+                                        <li>V1.2.9.4 — 索引优化</li>
+                                        <li>V1.2.9.3 — 优化与微调；部分实验功能</li>
+                                        <li>V1.2.9.2 — 底层重构与稳定性修正</li>
+                                        <li>V1.2.9.1 — 深色模式支持 / 壁纸工具优化</li>
+                                        <li>V1.2.9 — 竖排支持 / 锁屏调整</li>
+                                        <li>V1.2 — 繁简转换支持等修正</li>
+                                    </ul>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div data-include="partials/footer.html"></div>
+    <script src="include-partials.js"></script>
+
+</body>
+
+</html>

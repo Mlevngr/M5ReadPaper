@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>EPUB 转换器 - ReadPaper Utils</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+    <!-- styles moved to css/main.scss -->
+</head>
+
+<body>
+    <div data-include="partials/header.html"></div>
+
+    <main role="main" class="container" aria-labelledby="page-title">
+        <div class="row">
+            <div class="leftpanel col col-12">
+                <div class="panel">
+                    <h5 class="bg-light">EPUB 文件选择</h5>
+                    <div class="field">
+                        <label for="fileInput">选择本地书籍（.epub）</label>
+                        <div class="flex-row gap-small align-center">
+                            <input id="fileInput" type="file" accept=".epub,application/epub+zip" class="col-8"
+                                multiple />
+                            <button id="clearList" class="button col-4">清空列表</button>
+                        </div>
+                        <div class="field mt-05">
+                            <small class="muted">支持一次选择或拖拽多个 .epub 文件，所有文件会依次加入队列并批量转换。</small>
+                        </div>
+                        <div id="dropArea" class="mt-05">
+                            将 EPUB 文件拖拽到此处或点击选择文件
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-20">
+            <h5 class="bg-light col-12">参数</h5>
+            <div id="optionsArea" class="col-12">
+                <div class="field">
+                    <label><input type="checkbox" id="opt_extract_toc" /> 提取目录并单独生成 .idx 文件</label>
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" id="opt_remove_blank_lines" /> 去除空行（删除仅包含空格、换行符的无内容行）</label>
+                </div>
+                <div class="field">
+                    <label><input type="checkbox" id="opt_debug_details" /> 显示目录检测详情（调试用，日志会更详细）</label>
+                </div>
+                <div class="field">
+                    <small class="muted">若勾选目录提取：优先解析 EPUB3 的 nav.xhtml，其次回退 EPUB2 的 toc.ncx；并基于生成的 txt 累计字节计算 idx
+                        的位置和百分比。</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-05">
+            <h5 class="bg-light col-12">处理统计</h5>
+            <div class="col-12" id="convert-info"><!-- 显示转换汇总 --></div>
+        </div>
+
+        <div class="row mt-05">
+            <h5 class="bg-light col-12">生成文件与下载</h5>
+        </div>
+            <div class="col-12" id="downloadToolbar">
+                <button id="downloadAllZip" class="button col-5" disabled>全部打包下载 (.zip)</button>
+                <button id="clearGenerated" class="button col-5 secondary">清空已生成</button>
+            </div>
+            <div class="col-12">
+                <div id="downloadArea"><!-- 生成的文件下载链接会出现在这里 --></div>
+            </div>
+
+
+        <div id="fileList" class="row mt-12"></div>
+
+        <div id="buttonGrp" class="row">
+            <button id="generateBtn" class="button primary col-6 col-5-lg pull-left">开始转换</button>
+            <button id="cancelBtn" class="button col-5-lg col-6 pull-right" disabled>取消</button>
+        </div>
+
+        <div class="row">
+            <div class="col-12 mt-075">
+                <progress id="progressBar" value="0" max="100" class="progress-full"></progress>
+            </div>
+        </div>
+
+        <div class="row">
+            <summary class="summary-strong col-12 bg-light">生成日志</summary>
+        </div>
+        <details class="panel">
+            <pre id="log" class="log log-pre" aria-live="polite"></pre>
+        </details>
+    </main>
+
+    <div data-include="partials/footer.html"></div>
+
+    <script src="include-partials.js"></script>
+    <script src="text_postprocessor.js"></script>
+    <script src="epub_convertor.js"></script>
+</body>
+
+</html>

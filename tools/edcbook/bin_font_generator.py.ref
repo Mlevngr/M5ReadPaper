@@ -1,0 +1,563 @@
+import struct
+import os
+import freetype
+from tqdm import tqdm
+from itertools import chain
+import multiprocessing
+import numpy as np
+import time
+import sys
+import threading
+import queue
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import os.path
+import warnings
+import webbrowser  # 添加用于打开超链接的模块
+
+# 忽略libpng警告
+warnings.filterwarnings("ignore", category=UserWarning, message="libpng")
+
+# 全局变量用于存储进度信息
+progress_queue = queue.Queue()
+stop_event = threading.Event()
+
+
+def update_progress(value, max_value=None):
+    """更新进度信息"""
+    if max_value:
+        progress_queue.put(("progress", value, max_value))
+    else:
+        progress_queue.put(("progress", value))
+
+
+def generate_binary_font(char_data, output_path, font_height):
+    """生成二进制字体文件"""
+    # 创建输出目录（如果不存在）
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # 计算位图数据偏移量
+    char_count = len(char_data)
+    header_size = 4 + 1  # char_count (uint32_t) + font_size
+
+    # 结构体大小 (紧密打包)
+    entry_size = 20
+    entries_size = char_count * entry_size
+    current_offset = header_size + entries_size
+
+    # 准备文件内容和位图数据
+    bin_content = bytearray()
+    entries = []
+    bitmap_data = bytearray()
+
+    # 添加文件头：字符数、字体大小
+    bin_content.extend(struct.pack('<IB', char_count, font_height))
+
+    # 处理每个字符条目
+    for cp, bw, bh, w, xo, yo, bmp in char_data:
+        # 打包字符条目
+        entry = struct.pack('<HHBBbbIII',
+                            cp,  # unicode (2字节)
+                            w,  # width (2字节)
+                            bw,  # bitmapW (1字节)
+                            bh,  # bitmapH (1字节)
+                            xo,  # x_offset (1字节，有符号)
+                            yo,  # y_offset (1字节，有符号)
+                            current_offset,  # bitmap_offset (4字节)
+                            len(bmp),  # bitmap_size (4字节)
+                            0)  # cached_bitmap 初始化为NULL (4字节)
+        entries.append(entry)
+
+        # 添加位图数据
+        bitmap_data.extend(bmp)
+        current_offset += len(bmp)  # 更新偏移量
+
+    # 合并所有条目和位图数据
+    for entry in entries:
+        bin_content.extend(entry)
+    bin_content.extend(bitmap_data)
+
+    # 写入font.bin文件
+    with open(output_path, 'wb') as f:
+        f.write(bin_content)
+
+    return output_path
+
+
+def process_char(args):
+    """处理单个字符的函数（用于多进程）"""
+    font_path, font_height, char, ascender, white_threshold, black_threshold = args
+    face = freetype.Face(font_path)
+    face.set_pixel_sizes(0, font_height)
+
+    codepoint = ord(char)
+    if codepoint < 0x20 or codepoint == 0xFEFF:
+        return (codepoint, 0, 0, 0, 0, 0, b'')
+
+    # 检查字符是否在字体中存在
+    if face.get_char_index(codepoint) == 0:
+        # 字符不存在于字体中，使用替换字符25A1
+        if face.get_char_index(0x25A1) == 0:
+            return (codepoint, 0, 0, 0, 0, 0, b'')
+
+        face.load_char(0x25A1, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_NORMAL)
+        bitmap = face.glyph.bitmap
+        metrics = face.glyph.metrics
+    else:
+        # 正常加载当前字符
+        face.load_char(char, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_NORMAL)
+        bitmap = face.glyph.bitmap
+        metrics = face.glyph.metrics
+
+    # 使用NumPy加速位图处理
+    if bitmap.buffer:
+        bitmap_array = np.array(bitmap.buffer, dtype=np.uint8).reshape((bitmap.rows, bitmap.width))
+    else:
+        bitmap_array = np.zeros((bitmap.rows, bitmap.width), dtype=np.uint8)
+
+    # 寻找非空区域
+    non_empty_rows = np.any(bitmap_array >= white_threshold, axis=1)
+    non_empty_cols = np.any(bitmap_array >= white_threshold, axis=0)
+
+    if np.any(non_empty_rows) and np.any(non_empty_cols):
+        min_y = np.argmax(non_empty_rows)
+        max_y = bitmap.rows - 1 - np.argmax(non_empty_rows[::-1])
+        min_x = np.argmax(non_empty_cols)
+        max_x = bitmap.width - 1 - np.argmax(non_empty_cols[::-1])
+
+        cropped_w = max_x - min_x + 1
+        cropped_h = max_y - min_y + 1
+
+        # 提取裁剪区域并量化
+        cropped_area = bitmap_array[min_y:max_y + 1, min_x:max_x + 1]
+        quantized = np.zeros_like(cropped_area, dtype=np.uint8)
+
+        # 使用向量化操作
+        low_mask = cropped_area < white_threshold
+        high_mask = cropped_area > black_threshold
+        mid_mask = ~(low_mask | high_mask)
+
+        quantized[low_mask] = 15
+        quantized[high_mask] = 0
+        quantized[mid_mask] = (black_threshold - cropped_area[mid_mask]) // 14
+
+        # 霍夫曼编码处理
+        bits = []
+        for v in quantized.flatten():
+            if v == 15:
+                bits.append('0')  # 白色像素
+            elif v == 0:
+                bits.append('10')  # 黑色像素
+            else:
+                binary_part = bin(v)[2:].zfill(4)
+                bits.append('11' + binary_part)  # 灰度像素
+
+        bitstream = ''.join(bits)
+
+        # 将位流转换为字节数组
+        byte_array = bytearray()
+        current_byte = 0
+        current_bit_position = 7  # 从最高位开始填充
+
+        for bit in bitstream:
+            if bit == '1':
+                current_byte |= (1 << current_bit_position)
+            current_bit_position -= 1
+            if current_bit_position < 0:
+                byte_array.append(current_byte)
+                current_byte = 0
+                current_bit_position = 7
+
+        # 处理最后未满的字节
+        if current_bit_position != 7:
+            byte_array.append(current_byte)
+
+        bitmap_data = bytes(byte_array)
+        advance_width = metrics.horiAdvance >> 6
+        x_offset = (metrics.horiBearingX >> 6) + min_x
+        y_offset = (ascender - face.glyph.bitmap_top) + min_y
+
+        return (codepoint, cropped_w, cropped_h, advance_width, x_offset, y_offset, bitmap_data)
+    else:
+        # 没有有效像素，保留空位图但保留度量信息
+        advance_width = metrics.horiAdvance >> 6
+        x_offset = metrics.horiBearingX >> 6
+        y_offset = ascender - face.glyph.bitmap_top
+        return (codepoint, 0, 0, advance_width, x_offset, y_offset, b'')
+
+
+def generate_font_file(font_path, output_path,
+                       font_height=30,
+                       white_threshold=32,
+                       black_threshold=223):
+    """
+    生成字体文件的主函数
+
+    参数:
+        font_path (str): 字体文件路径
+        output_path (str): 输出文件路径
+        font_height (int): 字体像素大小 (28-42)
+        white_threshold (int): 白色门限值 (16-48)
+        black_threshold (int): 黑色门限值 (207-239)
+    """
+    # 参数验证
+    if not (28 <= font_height <= 42):
+        raise ValueError("字体大小必须在28-42范围内")
+    if not (16 <= white_threshold <= 48):
+        raise ValueError("白色门限必须在16-48范围内")
+    if not (207 <= black_threshold <= 239):
+        raise ValueError("黑色门限必须在207-239范围内")
+    if black_threshold <= white_threshold:
+        raise ValueError("黑色门限必须大于白色门限")
+
+    try:
+        face = freetype.Face(font_path)
+    except freetype.FT_Exception:
+        raise RuntimeError(f"无法加载字体文件: {font_path}")
+
+    face.set_pixel_sizes(0, font_height)
+
+    # 收集字符集
+    chars = set([chr(c) for c in range(0x20, 0x7F)])  # ASCII
+
+    # 完整GBK扫描
+    gbk_chars = []
+    for lead in range(0x81, 0xFF):  # 首字节 0x81-0xFE
+        if stop_event.is_set():
+            return
+
+        for trail in chain(range(0x40, 0x7F), range(0x80, 0xFE + 1)):
+            try:
+                char = bytes([lead, trail]).decode('gbk')
+                gbk_chars.append(char)
+            except UnicodeDecodeError:
+                pass
+
+    chars.update(gbk_chars)
+
+    # 添加特殊字符
+    chars.add('\u2022')  # 特殊符号'•'
+    chars.add('\u25A1')  # 添加替换字符
+    chars.add('\uFEFF')  # 添加BOM
+
+    # 预处理字体度量
+    face.load_char(' ', freetype.FT_LOAD_RENDER)
+    ascender = face.size.ascender >> 6
+
+    # 准备多进程参数
+    args = [(font_path, font_height, char, ascender, white_threshold, black_threshold) for char in chars]
+    total_chars = len(chars)
+    processed_chars = 0
+
+    # 使用多进程处理
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        results = []
+        for result in pool.imap(process_char, args):
+            if stop_event.is_set():
+                pool.terminate()
+                return
+
+            results.append(result)
+            processed_chars += 1
+            update_progress(processed_chars, total_chars)
+
+    char_data = results
+
+    # 添加控制字符
+    char_data.sort(key=lambda x: x[0])
+    control_chars = [(cp, 0, 0, 0, 0, 0, b'') for cp in range(0, 0x20)]
+    char_data = control_chars + char_data
+
+    # 生成二进制字体文件
+    bin_path = generate_binary_font(char_data, output_path, font_height)
+
+    return bin_path, len(char_data)
+
+
+def generate_font_in_thread(font_path, output_path, font_height, white_threshold, black_threshold):
+    """在单独线程中生成字体文件"""
+    try:
+        bin_path, total_chars = generate_font_file(
+            font_path=font_path,
+            output_path=output_path,
+            font_height=font_height,
+            white_threshold=white_threshold,
+            black_threshold=black_threshold
+        )
+        progress_queue.put(("complete", bin_path, total_chars))
+    except Exception as e:
+        progress_queue.put(("error", str(e)))
+
+
+# GUI 界面
+class FontGeneratorApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("EDCBook FontTool")
+        self.root.geometry("500x615")  # 减小高度以适应移除状态栏
+        self.root.resizable(False, False)  # 固定大小
+
+        # 创建主框架
+        main_frame = ttk.Frame(root, padding=15)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 标题
+        title_label = ttk.Label(main_frame, text="阅读卡片 | 二进制字体生成工具", font=("Arial", 16, "bold"))
+        title_label.pack(pady=(0, 15))
+
+        # 输入框架
+        input_frame = ttk.LabelFrame(main_frame, text="输入设置", padding=10)
+        input_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # 字体文件选择
+        ttk.Label(input_frame, text="字体文件:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.font_path = tk.StringVar()
+        font_entry = ttk.Entry(input_frame, textvariable=self.font_path, width=35)
+        font_entry.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
+        ttk.Button(input_frame, text="浏览", command=self.browse_font, width=8).grid(row=0, column=2, padx=5, pady=5)
+
+        # 输出文件选择
+        ttk.Label(input_frame, text="输出文件:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        self.output_path = tk.StringVar()
+        output_entry = ttk.Entry(input_frame, textvariable=self.output_path, width=35)
+        output_entry.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+        ttk.Button(input_frame, text="浏览", command=self.browse_output, width=8).grid(row=1, column=2, padx=5, pady=5)
+
+        # 参数设置
+        params_frame = ttk.LabelFrame(main_frame, text="生成参数", padding=10)
+        params_frame.pack(fill=tk.X, padx=5, pady=10)
+
+        # 字体大小
+        ttk.Label(params_frame, text="字体大小 (28-42):").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.font_size = tk.IntVar(value=30)
+        font_size_scale = ttk.Scale(params_frame, from_=28, to=42, variable=self.font_size,
+                                    orient=tk.HORIZONTAL, length=180, command=self.update_font_size)
+        font_size_scale.grid(row=0, column=1, padx=5, pady=2)
+        self.font_size_label = ttk.Label(params_frame, textvariable=self.font_size, width=3)
+        self.font_size_label.grid(row=0, column=2, padx=5, pady=2)
+        # 添加描述
+        desc_label1 = ttk.Label(params_frame, text="参数说明：28px最大支持18x19排版，42px最大支持12x13排版。",
+                                foreground="gray", font=("Arial", 9))
+        desc_label1.grid(row=1, column=0, columnspan=3, sticky=tk.W, padx=5, pady=5)
+
+        # 白色门限
+        ttk.Label(params_frame, text="白色门限 (16-48):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self.white_threshold = tk.IntVar(value=32)
+        white_scale = ttk.Scale(params_frame, from_=16, to=48, variable=self.white_threshold,
+                                orient=tk.HORIZONTAL, length=180, command=self.update_white_threshold)
+        white_scale.grid(row=2, column=1, padx=5, pady=2)
+        self.white_label = ttk.Label(params_frame, textvariable=self.white_threshold, width=3)
+        self.white_label.grid(row=2, column=2, padx=5, pady=2)
+        # 添加描述
+        desc_label2 = ttk.Label(params_frame, text="参数说明：越小字体显示越平滑，越大字体越锐利并偏白",
+                                foreground="gray", font=("Arial", 9))
+        desc_label2.grid(row=3, column=0, columnspan=3, sticky=tk.W, padx=5, pady=0)
+
+        # 黑色门限
+        ttk.Label(params_frame, text="黑色门限 (207-239):").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2)
+        self.black_threshold = tk.IntVar(value=223)
+        black_scale = ttk.Scale(params_frame, from_=207, to=239, variable=self.black_threshold,
+                                orient=tk.HORIZONTAL, length=180, command=self.update_black_threshold)
+        black_scale.grid(row=4, column=1, padx=5, pady=2)
+        self.black_label = ttk.Label(params_frame, textvariable=self.black_threshold, width=3)
+        self.black_label.grid(row=4, column=2, padx=5, pady=2)
+        # 添加描述
+        desc_label3 = ttk.Label(params_frame, text="参数说明：越大字体显示越平滑，越小字体越锐利并偏黑",
+                                foreground="gray", font=("Arial", 9))
+        desc_label3.grid(row=5, column=0, columnspan=3, sticky=tk.W, padx=5, pady=0)
+
+        # 进度条
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.pack(fill=tk.X, padx=5, pady=(15, 10))
+
+        self.progress_label = ttk.Label(progress_frame, text="就绪")
+        self.progress_label.pack(fill=tk.X, pady=5)
+
+        self.progress_bar = ttk.Progressbar(progress_frame, orient=tk.HORIZONTAL, mode='determinate')
+        self.progress_bar.pack(fill=tk.X, pady=5)
+
+        # 按钮框架
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, padx=5, pady=(10, 15))
+
+        self.generate_button = ttk.Button(button_frame, text="生成字体", command=self.start_generation, width=12)
+        self.generate_button.pack(side=tk.LEFT, padx=5)
+
+        self.cancel_button = ttk.Button(button_frame, text="取消", command=self.cancel_generation,
+                                        state=tk.DISABLED, width=8)
+        self.cancel_button.pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(button_frame, text="退出", command=self.root.quit, width=8).pack(side=tk.RIGHT, padx=5)
+
+        # 作者信息栏
+        author_frame = ttk.Frame(main_frame)
+        author_frame.pack(fill=tk.X, padx=5, pady=(10, 0))
+
+        author_info = "作者：梦西游啊游 | 版本：v1.00"
+        author_label = ttk.Label(author_frame, text=author_info, font=("Arial", 9), foreground="#666666")
+        author_label.pack(pady=2)
+
+        # 版权信息 - 添加超链接
+        # 创建可点击的超链接标签
+        website_frame = ttk.Frame(author_frame)
+        website_frame.pack()
+
+        ttk.Label(website_frame, text="更多信息请访问：",
+                  font=("Arial", 9), foreground="#666666").pack(side=tk.LEFT)
+
+        # 超链接部分
+        self.website_link = ttk.Label(website_frame, text="edcbook.cn",
+                                      font=("Arial", 9), foreground="blue", cursor="hand2")
+        self.website_link.pack(side=tk.LEFT)
+        self.website_link.bind("<Button-1>", self.open_website)
+        self.website_link.bind("<Enter>", lambda e: self.website_link.config(foreground="red"))
+        self.website_link.bind("<Leave>", lambda e: self.website_link.config(foreground="blue"))
+
+        # 启动GUI更新循环
+        self.update_gui()
+
+    def open_website(self, event):
+        """打开网站"""
+        webbrowser.open("https://edcbook.cn")
+
+    def update_font_size(self, value):
+        """更新字体大小显示为整数"""
+        self.font_size.set(round(float(value)))
+        self.font_size_label.config(text=str(self.font_size.get()))
+
+    def update_white_threshold(self, value):
+        """更新白色门限显示为整数"""
+        self.white_threshold.set(round(float(value)))
+        self.white_label.config(text=str(self.white_threshold.get()))
+
+    def update_black_threshold(self, value):
+        """更新黑色门限显示为整数"""
+        self.black_threshold.set(round(float(value)))
+        self.black_label.config(text=str(self.black_threshold.get()))
+
+    def browse_font(self):
+        """浏览字体文件"""
+        file_path = filedialog.askopenfilename(
+            title="选择字体文件",
+            filetypes=[("字体文件", "*.ttf *.otf *.ttc"), ("所有文件", "*.*")]
+        )
+        if file_path:
+            self.font_path.set(file_path)
+
+    def browse_output(self):
+        """选择输出文件"""
+        file_path = filedialog.asksaveasfilename(
+            title="保存字体文件",
+            defaultextension=".bin",
+            filetypes=[("二进制字体文件", "*.bin"), ("所有文件", "*.*")]
+        )
+        if file_path:
+            self.output_path.set(file_path)
+
+    def start_generation(self):
+        """开始生成字体文件"""
+        font_path = self.font_path.get()
+        output_path = self.output_path.get()
+        font_size = self.font_size.get()
+        white_threshold = self.white_threshold.get()
+        black_threshold = self.black_threshold.get()
+
+        # 验证输入
+        if not font_path or not os.path.isfile(font_path):
+            messagebox.showerror("错误", "请选择有效的字体文件")
+            return
+
+        if not output_path:
+            messagebox.showerror("错误", "请指定输出文件路径")
+            return
+
+        if not (28 <= font_size <= 42):
+            messagebox.showerror("错误", "字体大小必须在28-42范围内")
+            return
+
+        if not (16 <= white_threshold <= 48):
+            messagebox.showerror("错误", "白色门限必须在16-48范围内")
+            return
+
+        if not (207 <= black_threshold <= 239):
+            messagebox.showerror("错误", "黑色门限必须在207-239范围内")
+            return
+
+        if black_threshold <= white_threshold:
+            messagebox.showerror("错误", "黑色门限必须大于白色门限")
+            return
+
+        # 重置状态
+        self.progress_bar["value"] = 0
+        self.progress_label.config(text="就绪")
+        stop_event.clear()
+
+        # 更新按钮状态
+        self.generate_button.config(state=tk.DISABLED)
+        self.cancel_button.config(state=tk.NORMAL)
+
+        # 在单独线程中运行生成过程
+        self.generation_thread = threading.Thread(
+            target=generate_font_in_thread,
+            args=(font_path, output_path, font_size, white_threshold, black_threshold),
+            daemon=True
+        )
+        self.generation_thread.start()
+
+    def cancel_generation(self):
+        """取消生成过程"""
+        stop_event.set()
+        self.cancel_button.config(state=tk.DISABLED)
+        self.progress_label.config(text="操作已取消")
+
+    def update_gui(self):
+        """定期更新GUI状态"""
+        # 处理进度更新
+        while not progress_queue.empty():
+            item = progress_queue.get()
+            if item[0] == "progress":
+                if len(item) == 3:  # 有最大值
+                    value, max_value = item[1], item[2]
+                    self.progress_bar["maximum"] = max_value
+                    self.progress_bar["value"] = value
+                    self.progress_label.config(
+                        text=f"处理中: {value}/{max_value} 字符 ({value / max_value * 100:.1f}%)")
+
+            elif item[0] == "complete":
+                bin_path, total_chars = item[1], item[2]
+                self.generate_button.config(state=tk.NORMAL)
+                self.cancel_button.config(state=tk.DISABLED)
+                messagebox.showinfo("完成", f"字体文件生成成功!\n\n总字符数: {total_chars}\n文件路径: {bin_path}")
+
+            elif item[0] == "error":
+                error_msg = item[1]
+                self.generate_button.config(state=tk.NORMAL)
+                self.cancel_button.config(state=tk.DISABLED)
+                messagebox.showerror("错误", error_msg)
+
+        # 每100毫秒检查一次更新
+        self.root.after(100, self.update_gui)
+
+
+def main():
+    """主函数"""
+    root = tk.Tk()
+    app = FontGeneratorApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    # 确保在Windows上正确使用多进程
+    multiprocessing.freeze_support()
+
+    # 检查是否在PyInstaller打包环境中
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的可执行文件
+        multiprocessing.freeze_support()
+
+    # 忽略libpng警告
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 减少TensorFlow日志（如果有）
+
+    main()

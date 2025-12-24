@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>版本通知测试 - ReadPaper</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+</head>
+<body>
+    <div class="container" style="margin-top: 2rem;">
+        <h1>版本更新通知测试（新流程）</h1>
+
+        <div class="card">
+            <header>
+                <h3>操作面板</h3>
+            </header>
+            <div class="card-body">
+                <p class="muted">当前扩展在检测到新版本时，会在 <strong>新标签页</strong> 中打开 <code>version-update.html</code>。使用下面的工具快速验证相关逻辑。</p>
+
+                <div class="button-group" style="display:flex; flex-direction:column; gap:0.8rem; margin:1.2rem 0;">
+                    <button id="btnOpenTab" class="button primary">在新标签页打开更新页</button>
+                    <button id="btnOpenCurrent" class="button">在当前页面打开更新页</button>
+                    <button id="btnForceCheck" class="button outline">通知后台立即检测版本</button>
+                </div>
+
+                <div class="button-group" style="display:flex; flex-direction:column; gap:0.8rem; margin:1.2rem 0;">
+                    <button id="btnResetStorage" class="button">重置已记录版本</button>
+                    <button id="btnMarkCurrent" class="button">标记当前版本为已读</button>
+                    <button id="btnSimulateOld" class="button">写入旧版本（模拟需要更新）</button>
+                </div>
+
+                <div id="statusPanel" class="card" style="border:1px solid #e2e2e2; box-shadow:none;">
+                    <div class="card-body">
+                        <h4>当前状态</h4>
+                        <p><strong>扩展版本：</strong><span id="currentVersion" class="text-primary">-</span></p>
+                        <p><strong>已记录版本：</strong><span id="storedVersion" class="text-grey">-</span></p>
+                        <p><strong>是否会判定为更新：</strong><span id="needsUpdate" class="text-grey">-</span></p>
+                        <p class="muted" id="statusMessage" style="margin-top:0.5rem;">&nbsp;</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem;">
+            <header>
+                <h3>使用说明</h3>
+            </header>
+            <div class="card-body">
+                <ol>
+                    <li><strong>在新标签页打开更新页</strong>：模拟扩展真实行为，直接打开 <code>version-update.html</code>。</li>
+                    <li><strong>通知后台立即检测版本</strong>：通过消息调用后台 <code>checkVersionUpdate</code>，用于调试自动检测逻辑。</li>
+                    <li><strong>重置 / 标记 / 写入旧版本</strong>：操作 <code>readpaper_last_version</code> 存储，方便验证不同状态。</li>
+                </ol>
+
+                <p class="muted" style="margin-top: 1rem;">
+                    提示：后台脚本仅在扩展环境中可用；若在普通浏览器页面打开，本页会退化为使用 <code>localStorage</code> 的简单演示模式。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/version-test.js" defer></script>
+</body>
+</html>

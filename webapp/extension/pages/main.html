@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>字体生成 - ReadPaper Utils</title>
+  <link rel="stylesheet" href="../vendors/chota.css">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="icon" href="../../assets/favicon.png">
+  <link rel="icon" href="../../assets/favicon.png">
+  <!-- styles moved to css/main.scss (main.scss -> main.css) -->
+</head>
+
+<body>
+  <!-- header / nav will be loaded via client-side partial -->
+  <div data-include="partials/header.html"></div>
+
+  <main role="main" class="container" aria-labelledby="page-title">
+
+    
+    
+
+    <div class="row">
+      <div class="leftpanel col col-4">
+        <div class="panel">
+          <h5 class="bg-light">文件选择</h5>
+          <div class="field">
+            <label for="firmwareSelect">固件选择</label>
+            <select id="firmwareSelect">
+              <option value="readpaper" selected>ReadPaper</option>
+              <option value="edc">EDC Book</option>
+            </select>
+          </div>
+
+          <h5 class="bg-light">字符选择</h5>
+          <div class="field">
+            <label><input id="use_full_charset" type="radio" name="charset_choice" value="full" /> 字体全量字符集（上限65536）</label>
+          </div>
+          <div class="field">
+            <label><input id="use_common_charset" type="radio" name="charset_choice" value="common" checked /> 常用字符集（中文+西文）</label>
+          </div>
+          <div class="field">
+            <label><input id="use_custom_charset" type="radio" name="charset_choice" value="custom" /> 自定义 Unicode (例如: 0x0000-0xFFFF, 0x1234)</label>
+            <input id="custom_unicode" type="text" placeholder="0x0000-0xFFFF, 0x1234" />
+          </div>
+          <div class="field">
+            <label for="fontFile">字体文件</label>
+            <div class="flex-row gap-small align-center">
+              <input id="fontPath" type="text" class="col-6" placeholder="选择 .ttf 或 .otf 字体文件" readonly />
+              <input id="fontFile" type="file" accept=".ttf,.otf" class="hidden" />
+              <button id="btnBrowseFont" class="button col-6 primary">浏览...</button>
+            </div>
+          </div>
+
+          <div class="is-hidden field">
+            <label for="outputPath">输出文件</label>
+            <div class="flex-row gap-small align-center">
+              <input class="col-6" id="outputPath" type="text" placeholder="输出 .bin 文件路径" />
+              <button id="btnBrowseOut" class="button col-6">浏览...</button>
+            </div>
+          </div>
+
+          <h5 class="bg-light">参数配置</h5>
+          <div class="field flex-row gap-medium align-center">
+            <div class="col-6">
+              <label for="size">大小 (24-48)</label>
+              <input id="size" type="number" min="20" max="40" value="32" />
+            </div>
+            <div class="col-6">
+              <label for="white" class="hidden">颜色深度<small class="muted">(<span id="whiteValue">160</span>)</small></label>
+              <div class="flex-row align-center white-control">
+                <button id="whiteDec" class="primary button is-small outline" type="button" aria-label="减少颜色深度">−</button>
+                <input id="white" type="range" min="10" max="240" value="160" step="1" />
+                <button id="whiteInc" class="primary button is-small outline" type="button " style="padding-left:2px " aria-label="增加颜色深度">＋</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="edcThresholdControls" class="field flex-row gap-medium align-center is-hidden">
+            <div class="col-6">
+              <label for="edcWhite">白色门限<small class="muted">(<span id="edcWhiteValue">32</span>)</small></label>
+              <div class="flex-row align-center threshold-control">
+                <input id="edcWhite" type="range" min="16" max="48" value="32" step="1" />
+              </div>
+            </div>
+            <div class="col-6">
+              <label for="edcBlack">黑色门限<small class="muted">(<span id="edcBlackValue">223</span>)</small></label>
+              <div class="flex-row align-center threshold-control">
+                <input id="edcBlack" type="range" min="207" max="239" value="223" step="1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- V3 三色阈值控制（仅在 Read Paper V3 模式显示） -->
+          <div id="v3ThresholdControls" class="field flex-row gap-medium align-center is-hidden">
+            <div class="col-6">
+              <label for="v3White">V3 白色门限<small class="muted">(<span id="v3WhiteValue">200</span>)</small></label>
+              <div class="flex-row align-center threshold-control">
+                <input id="v3White" type="range" min="160" max="240" value="200" step="1" />
+              </div>
+            </div>
+            <div class="col-6">
+              <label for="v3Gray">V3 灰色门限<small class="muted">(<span id="v3GrayValue">120</span>)</small></label>
+              <div class="flex-row align-center threshold-control">
+                <input id="v3Gray" type="range" min="80" max="200" value="120" step="1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="is-hidden col-6">
+            <label><input id="opt_gbk" type="checkbox" checked /> 包含简体</label>
+          </div>
+          <div class="is-hidden col-6">
+            <label><input id="opt_traditional" type="checkbox" checked /> 包含繁体</label>
+          </div>
+          <div class="is-hidden flex-33">
+            <label><input id="opt_japanese" type="checkbox" /> 包含日文</label>
+          </div>
+
+          <div class="field hidden flex-row gap-medium align-center mt-05">
+            <div class="flex-50">
+              <label for="chunkSize">分批大小 (字符数/批)</label>
+              <input id="chunkSize" type="number" min="50" max="5000" value="800" />
+            </div>
+            <div class="flex-50">
+              <label for="workerCount">并发 Workers</label>
+              <input id="workerCount" type="number" min="1" max="8" value="2" />
+            </div>
+          </div>
+
+          <!-- 隐藏选项 -->
+          <input id="no_gbk" type="checkbox" class="hidden" />
+          <input id="no_smooth" type="checkbox" class="hidden" />
+
+          <h5 class="bg-light">Demo 预览</h5>
+          <div class="is-hidden field">
+            <label>
+              <input id="demo_enable" type="checkbox" checked /> <span class="ml-04">生成 Demo 图片</span>
+            </label>
+          </div>
+          <div class="field">
+            <label for="demo_text">Demo 文本</label>
+            <input id="demo_text" type="text" placeholder="行至水穷处，坐看云起时" />
+          </div>
+          <div class="is-hidden field">
+            <label for="demo_out">Demo 输出</label>
+            <input id="demo_out" type="text" placeholder="(留空使用与输出文件同名的 .png)" />
+          </div>
+
+          <h5 class="bg-light" id="exportOptionsTitle" style="display: none;">导出选项</h5>
+          <div class="field" id="exportOptions" style="display: none;">
+            <label>
+              <input id="export_progmem" type="checkbox" /> <span class="ml-04">导出 C++ PROGMEM 文件</span>
+            </label>
+            <p class="muted" style="font-size: 0.85em; margin-top: 0.25rem;">
+              生成 Arduino/ESP32 兼容的 PROGMEM 格式源代码(仅 ReadPaper 模式)
+            </p>
+          </div>
+
+        </div>
+      </div>
+      <div class="col col-8">
+        <h5 class="bg-light">状态信息</h5>
+        <div class="row info-row">
+          <div class="col-4 info-item">
+            <div class="info-label">字体名</div>
+            <div id="nameValue" class="info-value">未知</div>
+          </div>
+          <div class="col-4 info-item">
+            <div class="info-label">样式</div>
+            <div id="styleValue" class="info-value">未知</div>
+          </div>
+          <div class="field col-4 info-item">
+            <div class="info-label">状态</div>
+            <div id="statusValue" class="info-value">就绪</div>
+          </div>
+        </div>
+        <div class="row">
+          <h5 class="bg-light col-12">字形预览</h5>
+          <div class='col-12' id="previewer"></div>
+        </div>
+
+
+        <div class="row">
+          <button id="generateBtn" class="button primary col-6">开始生成</button>
+          <button id="cancelBtn" class="button col-6 pull-right" disabled>取消</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-12 mt-075">
+        <progress id="progressBar" value="0" max="100" class="progress-full"></progress>
+      </div>
+    </div>
+
+    <div class="row">
+      <summary class="summary-strong col-12 bg-light">生成日志</summary>
+    </div>
+    </div>
+    <details class="panel">
+      <pre id="log" class="log log-pre" aria-live="polite"></pre>
+    </details>
+
+  </main>
+
+  <div data-include="partials/footer.html"></div>
+
+  <script src="include-partials.js"></script>
+  <script src="readpaper_renderer.js"></script>
+  <script src="readpaper_v3_renderer.js"></script>
+  <script src="edc_renderer.js"></script>
+  <script src="render_helpers.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

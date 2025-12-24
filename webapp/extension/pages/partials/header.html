@@ -1,0 +1,39 @@
+<div class="container">
+  <a class="homepage button is-small outline" href="https://github.com/shinemoon/releaseReadPaper" target="_blank"
+    rel="noopener noreferrer">Github</a>
+
+  <nav class="nav">
+    <div class="nav-left mainnav">
+      <div class="tabs">
+        <!-- 默认将文件管理指向 welcome.html 并标记为在心跳生效前禁用 -->
+        <a href="welcome.html" class="text-light disabled-until-heartbeat" aria-disabled="true">文件管理</a>
+        <a href="main.html" class="text-dark">字体生成</a>
+        <a href="text_processor.html" class="text-dark">文本处理</a>
+        <a href="epub_convertor.html" class="text-dark">格式转换</a>
+        <a href="pichandle.html" class="text-dark">图片处理</a>
+        <a href="about.html" class="text-dark">关于</a>
+      </div>
+    </div>
+    <div class="nav-right mainnav">
+      <!-- Brand now points to welcome.html as the site default/home page -->
+      <a class="brand" href="welcome.html"><img src="../assets/start.png" alt=""></a>
+    </div>
+  </nav>
+</div>
+<style>
+  /* Device info fade: hidden by default, add .show to fade in */
+  #device-info {
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  #device-info.show {
+    opacity: 1;
+    margin-top: .5rem;
+    margin-left: 1rem;
+    font-size: .8em;
+    color: orangered;
+  }
+</style>
+<script src="js/modal_confirm.js" defer></script>
+<script src="js/heartbeat.js" defer></script>

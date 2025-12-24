@@ -1,0 +1,95 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "atomic": "cpp",
+        "bitset": "cpp",
+        "cctype": "cpp",
+        "chrono": "cpp",
+        "clocale": "cpp",
+        "cmath": "cpp",
+        "condition_variable": "cpp",
+        "cstdarg": "cpp",
+        "cstddef": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "cstring": "cpp",
+        "ctime": "cpp",
+        "cwchar": "cpp",
+        "cwctype": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "exception": "cpp",
+        "algorithm": "cpp",
+        "functional": "cpp",
+        "iterator": "cpp",
+        "map": "cpp",
+        "memory": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "optional": "cpp",
+        "random": "cpp",
+        "ratio": "cpp",
+        "regex": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "system_error": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "fstream": "cpp",
+        "initializer_list": "cpp",
+        "iomanip": "cpp",
+        "iosfwd": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "limits": "cpp",
+        "mutex": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "stdexcept": "cpp",
+        "streambuf": "cpp",
+        "thread": "cpp",
+        "cinttypes": "cpp",
+        "typeinfo": "cpp",
+        "codecvt": "cpp",
+        "complex": "cpp",
+        "csignal": "cpp",
+        "set": "cpp",
+        "future": "cpp",
+        "variant": "cpp"
+    },
+
+    // ReaderPaper: add a PowerShell profile that dot-sources the workspace powershell.ps1
+    "terminal.integrated.profiles.windows": {
+        "ReaderPaper PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell",
+            "args": ["-NoExit", "-Command", ". '${workspaceFolder}\\powershell.ps1'"]
+        }
+    },
+
+    // Set ReaderPaper PowerShell as the default integrated terminal for this workspace
+    "terminal.integrated.defaultProfile.windows": "ReaderPaper PowerShell",
+
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                "scope": [
+                    "keyword.control.directive.c",
+                    "punctuation.section.preprocessor.c",
+                    "meta.preprocessor.c",
+                    "variable.other.preprocessor"
+                ],
+                "settings": {
+                    "foreground": "#555555",
+                    "fontStyle": ""
+                }
+            }
+        ]
+    }
+}

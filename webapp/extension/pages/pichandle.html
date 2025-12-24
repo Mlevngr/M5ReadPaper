@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>图片处理 · ReadPaper Tools</title>
+    <link rel="stylesheet" href="../vendors/chota.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="../../assets/favicon.png">
+    <style>
+        .preview-area {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .panel-left,
+        .panel-right {
+            flex: 1 1 300px;
+            min-width: 0;
+        }
+
+        @media (max-width: 768px) {
+            .panel-left, .panel-right {
+                flex: 1 1 100%;
+            }
+            
+            .preview-container {
+                max-width: 100% !important;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .preview-area {
+                align-items: flex-start;
+            }
+            
+            .panel-right .card-body {
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                height:100%;
+            }
+            
+            .preview-container {
+                flex: 1;
+                position: relative;
+                max-width: none;
+                margin: 1rem 0 0 0;
+                min-height: 0;
+                overflow: hidden;
+            }
+            
+            .preview-container::before {
+                display: none;
+            }
+            
+            .preview-container canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+            }
+        }
+
+        .preview-container {
+            position: relative;
+            width: 100%;
+            max-width: 540px;
+            margin: 0 auto;
+        }
+
+        .preview-container::before {
+            content: '';
+            display: block;
+            padding-top: 177.78%; /* 960/540 = 1.7778 */
+        }
+
+        canvas { 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            /* Disable default touch-driven panning on mobile so we can implement canvas drag */
+            touch-action: none;
+            -ms-touch-action: none;
+        }
+
+        .controls label { 
+            display: block; 
+            margin: .8rem 0 .3rem; 
+            font-weight: 600;
+            font-size: .9rem;
+        }
+        
+        .controls input[type=range] { 
+            width: 100%; 
+            margin: .3rem 0;
+        }
+        
+        .controls select {
+            width: 100%;
+            margin: .3rem 0;
+        }
+
+        .control-group {
+            margin-bottom: 1rem;
+        }
+
+        .inline-control {
+            display: flex;
+            gap: .5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .inline-control input[type=number] {
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: .5rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .btn {
+            padding: .6rem 1.2rem;
+            font-size: .9rem;
+        }
+
+        .value-display {
+            display: inline-block;
+            min-width: 45px;
+            text-align: center;
+            font-weight: 600;
+            color: #0066cc;
+        }
+
+        .file-input-wrapper {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div data-include="partials/header.html"></div>
+
+    <main role="main" class="container" aria-labelledby="page-title">
+
+        <div class="row">
+            <div class="col col-12">
+                <h5 class="bg-light">图片处理（Papers3 / 预处理）</h5>
+                <div class="panel">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="preview-area mt-05">
+                                <div class="panel-left">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6>处理选项</h6>
+                                            <div class="file-input-wrapper">
+                                                <div class="flex-row gap-small align-center">
+                                                    <input id="fileInput" type="file" accept="image/*" class="col-8">
+                                                    <button id="downloadBtn" class="button primary col-4">⬇️ 下载</button>
+                                                </div>
+                                            </div>
+                                            <div class="controls">
+                                                <div class="control-group">
+                                                    <label>缩放 <span id="scaleVal" class="value-display">100%</span></label>
+                                                    <input id="scaleRange" type="range" min="10" max="200" value="100">
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>二值化阈值 <span id="thresholdVal" class="value-display">128</span></label>
+                                                    <input id="thresholdRange" type="range" min="0" max="255" value="128">
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>灰度模式</label>
+                                                    <select id="grayscaleMode">
+                                                        <option value="none">保留彩色</option>
+                                                        <option value="gray" selected>灰度</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>魔法棒容差 <span id="magicToleranceVal" class="value-display">32</span></label>
+                                                    <input id="magicTolerance" type="range" min="0" max="255" value="32">
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>魔法棒</label>
+                                                    <div class="inline-control">
+                                                        <button id="magicModeBtn" type="button" class="btn">🪄 魔法棒</button>
+                                                        <button id="magicUndoBtn" type="button" class="btn" disabled>↩️ 撤销</button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>灰度等级</label>
+                                                    <select id="grayLevels">
+                                                        <option value="2">2 级（黑白）</option>
+                                                        <option value="4">4 级</option>
+                                                        <option value="8">8 级</option>
+                                                        <option value="16" selected>16 级</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>抖动算法</label>
+                                                    <select id="ditherMode">
+                                                        <option value="none">无抖动</option>
+                                                        <option value="floyd">Floyd–Steinberg</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>背景填充</label>
+                                                    <select id="backgroundFill">
+                                                        <option value="#ffffff" selected>白色</option>
+                                                        <option value="#000000">黑色</option>
+                                                        <option value="transparent">透明</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="control-group">
+                                                    <label>输出尺寸 (px)</label>
+                                                    <div class="inline-control">
+                                                        <input id="outWidth" type="number" min="1" placeholder="宽度" value="540">
+                                                        <span>×</span>
+                                                        <input id="outHeight" type="number" min="1" placeholder="高度" value="960">
+                                                        <button id="resetSize" class="btn btn-sm">重置</button>
+                                                    </div>
+                                                </div>
+
+                                                
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel-right">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6>预览区域（可拖动图片调整位置）</h6>
+                                            <div class="preview-container">
+                                                <canvas id="srcCanvas" style="background-color:#eeee;"></canvas>
+                                            </div>
+                                            <!-- 处理结果画布已隐藏；首个预览区域显示处理后结果，outCanvas 保留用于导出 -->
+                                            <canvas id="outCanvas" style="display:none"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div data-include="partials/footer.html"></div>
+    <script src="include-partials.js"></script>
+    <script src="js/pichandle.js" defer></script>
+</body>
+
+</html>

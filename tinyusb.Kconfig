@@ -1,0 +1,58 @@
+# Put this section into the related component's folder 's Kconfig file to extend the menu e.g. .platformio\packages\framework-espidf\components\tinyusb
+
+menu "TinyUSB MSC (Mass Storage Class) configuration"
+    
+    config TINYUSB_ENABLED
+        bool "Enable TinyUSB device"
+        default y
+        help
+          Enable support in the TinyUSB stack.
+
+    config TINYUSB_MSC_ENABLED
+        bool "Enable TinyUSB MSC device"
+        default y
+        help
+          Enable Mass Storage Class device support in the TinyUSB stack.
+          If set, user must implement tud_msc_xxx callbacks.
+
+    config TINYUSB_MSC_BUFSIZE
+        int "MSC buffer size (bytes)"
+        default 4096
+        range 512 12288
+        help
+          Size of the internal SCSI read/write buffer per LUN.
+          Larger value speeds up bulk transfer but consumes more RAM.
+
+    config TINYUSB_MSC_LUN_COUNT
+        int "Number of logical units (LUN)"
+        default 1
+        range 1 4
+        help
+          TinyUSB MSC supports up to 4 LUNs. Each LUN needs its own
+          inquiry string, capacity and block read/write callbacks.
+
+    config TINYUSB_MSC_VENDOR_ID
+        string "Vendor ID string (8 bytes max)"
+        default "ESP32"
+        help
+          Returned in SCSI INQUIRY command. Must be ≤ 8 characters.
+
+    config TINYUSB_MSC_PRODUCT_ID
+        string "Product ID string (16 bytes max)"
+        default "MSC Disk"
+        help
+          Returned in SCSI INQUIRY command. Must be ≤ 16 characters.
+
+    config TINYUSB_MSC_SERIAL
+        string "Serial number string (16 bytes max)"
+        default "123456789"
+        help
+          Returned in SCSI INQUIRY command. Must be ≤ 16 characters.
+
+    config TINYUSB_MSC_DEBUG
+        bool "Enable MSC debug output"
+        default n
+        help
+          Turn on TinyUSB MSC debug messages (requires CDC logger).
+
+endmenu
