@@ -25,6 +25,8 @@
                         <div class="card-body">
                             <h4 class="text-primary">Y.A.P.T.R. — Yet Another PaperS3 Text Reader</h4>
                             <p class="muted">出于个人兴趣开发的轻量级阅读固件，针对 PaperS3 平台的文本阅读体验进行了优化。</p>
+                            <p><b>代码和设计已开源</b>， <a href="https://github.com/shinemoon/M5ReadPaper">仓库地址</a></p>
+                            <p>更详细的使用和帮助信息后续也会在Wiki部分更新</b>， <a href="https://github.com/shinemoon/M5ReadPaper/wiki">Wiki</a></p>
                             <h5>快速上手</h5>
                             <ul>
                                 <li>双击解锁</li>
@@ -32,6 +34,10 @@
                                 <li>点击中心区域显示菜单</li>
                                 <li>支持180度自动旋转（并且会配合修改翻页手）</li>
                             </ul>
+
+                            <h4>Readpaper Utils 浏览器扩展</h4>
+                            <p>与之配套的浏览器扩展则是为了方便使用，把文件管理（仅支持Readpaper固件），字体生成，文本文件优化，Epub文件转换和壁纸生成整合在浏览器中方便使用。</p>
+                            <p>除了文件管理需要配合Readpaper固件之外，其余功能都可以配合<a href="https://edcbook.cn">EDCBook</a>固件来使用（字体生成请注意正确的字体类型，即EDCBook字体），而目录文件也是EDCBook兼容。</p>
                         </div>
                     </div>
 
@@ -41,11 +47,6 @@
                                 <h4>字体与显示</h4>
                                 <p>为了提高对生僻字的支持并节省存储空间，本项目使用了进一步压缩的字体（.bin）。压缩会带来视觉损耗，建议通过工具页面的预览功能调校阈值与尺寸以达到最佳效果。</p>
                                 <p>当前支持了ReadPaper和EDC Book两种固件的bin文件字体生成，请在页面通过下拉框选择类型生成。</p>
-                                <h5>仓库与工具</h5>
-                                <p>更多说明、字体：</p>
-                                <p><a href="https://github.com/shinemoon/releaseReadPaper" target="_blank"
-                                        rel="noopener noreferrer">https://github.com/shinemoon/releaseReadPaper</a></p>
-
                             </div>
                         </div>
                     </div>
@@ -55,7 +56,7 @@
                             <div class="card-body">
                                 <h4>文件管理</h4>
                                 <p>推荐1.3之后使用扩展进行文件管理，网页直连后续不一定能够及时更新了；而用于支持前端或者工具开发的API文档参见:</p>
-                                <p><a href="https://github.com/shinemoon/releaseReadPaper/blob/main/WIFI_HTTP_API.md"
+                                <p><a href="https://github.com/shinemoon/M5ReadPaper.wiki/blob/main/WIFI_HTTP_API.md"
                                         target="_blank" rel="noopener noreferrer">ReaderPaper — HTTP API（Web 前端
                                         开发者参考）</a></p>
 
@@ -84,9 +85,11 @@
                                 <h4>壁纸</h4>
                                 <p>壁纸请上传到“锁屏”目录，对应SD的/image，按照如下优先级选择锁屏图案:</p>
                                 <ul>
-                                    <li>与当前阅读书籍的同名的图片(png/jpg/jpeg/bmp);</li>
-                                    <li>'default.png';</li>
-                                    <li>系统自带;</li>
+                                    <li>优先设定当前书籍同名壁纸;</li>
+                                    <li>然后是试图看看有没有可以模糊匹配的壁纸（即试图找到第一个被当前书名所包含的图片名,例如，
+                                        《古龙作品集-XXXXX.txt》会试图使用"古龙.png"或者"作品集.png"之类）;</li>
+                                    <li>然后是根据设备的显示配置，使用default.png，或者是随机的图片；</li>
+                                    <li>当卡上不存在随机图片，或者虽然设置为默认壁纸但是不存在default.png时，则使用系统自带壁纸;</li>
                                 </ul>
                                 <p>PS：支持透明png。</p>
                             </div>
@@ -156,8 +159,8 @@
                         <div class="card">
                             <div class="card-body">
                                 <h4>版本历史</h4>
+                                <div>V1.5之后的版本更新参见<a href="https://github.com/shinemoon/M5ReadPaper/commits/main/">Github的历史</a>和<a href="https://github.com/shinemoon/M5ReadPaper/releases"> Release记录</a></div>
                                 <ul>
-                                    <li>V1.6 - 一些底层重构以及Bug修正</li>
                                     <li>V1.5 - UI调整 / Bug修正 /字体调整</li>
                                     <li>V1.4</li>
                                     <ul>
