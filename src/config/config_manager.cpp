@@ -109,6 +109,12 @@ bool config_save()
     Serial.printf("[CONFIG] 写入双份配置文件 (sequence=%u)\n", stats.sequence);
 #endif
 
+    // 保存前确保约束条件：dark 模式下强制启用快刷
+    if (g_config.dark)
+    {
+        g_config.fastrefresh = true;
+    }
+
     // Lambda 函数：写入配置内容（A 和 B 使用相同的写入逻辑）
     auto write_config = [&](File &config_file) -> bool {
         // 写入配置文件头（包含序列号）
@@ -344,10 +350,17 @@ static int32_t config_load_from_file(const char* path, GlobalConfig& out_config,
         else if (key == "dark")
         {
             temp_config.dark = (value == "true" || value == "1");
+            // dark 模式下强制启用快刷
+            if (temp_config.dark)
+            {
+                temp_config.fastrefresh = true;
+            }
         }
         else if (key == "fastrefresh")
         {
             temp_config.fastrefresh = (value == "true" || value == "1");
+            // 如果已经加载了 dark 模式，确保快刷不会被关闭
+            // 注意：这里依赖于配置文件中 dark 在 fastrefresh 之前
         }
         else if (key == "autospeed")
         {
@@ -498,6 +511,13 @@ bool config_load()
 #endif
         // sync autospeed
         ::autospeed = g_config.autospeed;
+            
+            // 确保约束条件：dark 模式下强制启用快刷
+            if (g_config.dark)
+            {
+                g_config.fastrefresh = true;
+            }
+            
             return true;
         }
         
@@ -534,6 +554,12 @@ bool config_load()
 
     // 将配置中的 autospeed 同步到运行时全局变量
     ::autospeed = g_config.autospeed;
+
+    // 确保约束条件：dark 模式下强制启用快刷
+    if (g_config.dark)
+    {
+        g_config.fastrefresh = true;
+    }
 
     // 更新统计信息
     stats.total_loads++;

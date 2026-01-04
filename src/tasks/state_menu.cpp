@@ -492,19 +492,29 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
 #if DBG_STATE_MACHINE_TASK
                 sm_dbg_printf("Switch FAST命令收到，切换主题\n");
 #endif
-                // 切换 dark 配置并保存
-                g_config.fastrefresh= !g_config.fastrefresh;
-                config_save();
-                // 刷新阅读菜单以应用新主题 (参数以现有调用为准)
-                (void)show_reading_menu(g_canvas, false);
+                // dark 模式下禁止修改快刷设置
+                if (!g_config.dark)
+                {
+                    // 切换 fastrefresh 配置并保存
+                    g_config.fastrefresh= !g_config.fastrefresh;
+                    config_save();
+                    // 刷新阅读菜单以应用新主题 (参数以现有调用为准)
+                    (void)show_reading_menu(g_canvas, false);
+                }
+                // dark 模式下忽略此操作
             }
             else if (touch_result.message != nullptr && std::strcmp(touch_result.message, "Switch DARK") == 0)
             {
 #if DBG_STATE_MACHINE_TASK
                 sm_dbg_printf("Switch DARK 命令收到，切换主题\n");
 #endif
-                // 切换 dark 配置并保存
+                // 切换 dark 配置
                 g_config.dark = !g_config.dark;
+                // 如果开启 dark 模式，强制启用快刷模式
+                if (g_config.dark)
+                {
+                    g_config.fastrefresh = true;
+                }
                 config_save();
                 // 刷新阅读菜单以应用新主题 (参数以现有调用为准)
                 (void)show_reading_menu(g_canvas, false);

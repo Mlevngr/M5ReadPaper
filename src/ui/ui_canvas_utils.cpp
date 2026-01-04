@@ -438,7 +438,8 @@ void drawBottomUI(M5Canvas *canvas, int16_t x, int16_t y)
     canvas->fillRect(x, y, 540, 2, TFT_BLACK);
     // Move the space
     drawSwitch(canvas, x + 40, y + 40, g_config.dark, "深色模式", 26);
-    drawSwitch(canvas, x + 270, y + 40, g_config.fastrefresh, "快刷模式", 26);
+    // dark 模式下快刷开关显示为灰色（不可修改）
+    drawSwitch(canvas, x + 270, y + 40, g_config.fastrefresh, "快刷模式", 26, g_config.dark ? 8 : 0);
 
     // 5. 书签目录相关
     /*
