@@ -254,7 +254,25 @@ bool init_filesystem()
 
     // 检查并创建必要的目录
     createRequiredDirectories();
-
+    // 清除默认文件 /ReadPaper.txt 的书签文件
+    // 这些文件位于 SD 卡的 /bookmarks/ 目录下
+    const char* bookmark_files[] = {
+        "/bookmarks/_spiffs_ReadPaper.bm",
+        "/bookmarks/_spiffs_ReadPaper.complete",
+        "/bookmarks/_spiffs_ReadPaper.page",
+        "/bookmarks/_spiffs_ReadPaper.tags"
+    };
+    
+    for (size_t i = 0; i < sizeof(bookmark_files) / sizeof(bookmark_files[0]); ++i)
+    {
+        if (SDW::SD.exists(bookmark_files[i]))
+        {
+#if DBG_FILE_MANAGER
+            Serial.printf("[FS] 清除默认书签文件: %s\n", bookmark_files[i]);
+#endif
+            SDW::SD.remove(bookmark_files[i]);
+        }
+    }
     // 初始化完成后，刷新全局字体列表
     // font_list_scan();
 
