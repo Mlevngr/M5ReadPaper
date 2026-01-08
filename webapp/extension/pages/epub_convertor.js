@@ -545,6 +545,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // if spine empty, try to fallback to reading all html/xhtml files in manifest in order
     const itemsToRead = (spineIds.length > 0) ? spineIds.map(id => ({ id, ...manifest[id] })).filter(Boolean) : Array.from(Object.entries(manifest)).filter(([k, m]) => m.media && /x?html|xml|application\/xhtml\+xml|text\/html/i.test(m.media || '')).map(([id, m]) => ({ id, ...m }));
 
+    // 调试日志：显示 spine 和待读文件信息
+    dlog(`[EPUB 解析] spine 文件数: ${spineIds.length}, 待读文件数: ${itemsToRead.length}`);
+    dlog(`[EPUB 解析] spine IDs: ${spineIds.slice(0, 5).join(', ')}${spineIds.length > 5 ? '...' : ''}`);
+    dlog(`[EPUB 解析] 待读文件前5个: ${itemsToRead.slice(0, 5).map(it => it.href).join(', ')}`);
+    
     const baseOpf = fullPath;
     // 解析 TOC（无论是否导出 idx，都用于判定目录页/目录块）
     const tocEntriesAll = await extractTocEntries(zip, pkgDoc, baseOpf);
@@ -712,6 +717,16 @@ document.addEventListener('DOMContentLoaded', () => {
       targetsByPath.get(key).push(e);
     }
 
+    // 调试日志：汇总目录识别结果
+    dlog(`[目录识别] 整页目录文件数: ${standaloneTocFiles.size}`);
+    dlog(`[目录识别] 需剥离导航的文件数: ${stripNavPages.size}`);
+    if (standaloneTocFiles.size > 0) {
+      dlog(`[目录识别] 整页目录列表: ${Array.from(standaloneTocFiles).join(', ')}`);
+    }
+    if (stripNavPages.size > 0) {
+      dlog(`[目录识别] 需剥离导航列表: ${Array.from(stripNavPages).join(', ')}`);
+    }
+
     let total = itemsToRead.length; let processed = 0; let outTextParts = [];
     const encoder = new TextEncoder();
     let cumulativeBytes = 0; // total bytes so far of output txt
@@ -738,19 +753,35 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const item of itemsToRead) {
       if (abortRequested) throw new Error('已取消');
       const href = canonicalPath(baseOpf, item.href, zip);
+      // 调试日志：记录每个文件的处理状态
+      dlog(`[文件处理] ${processed + 1}/${total}: ${href}`);
+      dlog(`  - 是否为整页目录: ${standaloneTocFiles.has(href)}`);
+      dlog(`  - 是否需要剥离导航: ${stripNavPages.has(href)}`);
+      
       // 不再提前跳过整页目录；统一先拼接，再在最终文本阶段裁剪目录前缀
       let fileEntry = zip.file(href);
       if (!fileEntry) { // try without base path as fallback
         log('警告: 未在 zip 中找到 ' + href + ', 尝试查找同名文件');
+        dlog(`[文件处理] ❌ 文件不存在于 ZIP: ${href}`);
         // try find by filename only
         const nameOnly = href.split('/').pop();
         const guess = Object.keys(zip.files).find(k => k.endsWith('/' + nameOnly) || k === nameOnly);
-        if (guess) fileEntry = zip.file(guess);
+        if (guess) {
+          fileEntry = zip.file(guess);
+          dlog(`[文件处理] ✓ 找到替代路径: ${guess}`);
+        }
       }
-      if (!fileEntry) { log('跳过: 无法找到 ' + href); processed++; setProgress((processed / total) * 100); continue; }
+      if (!fileEntry) { 
+        log('跳过: 无法找到 ' + href); 
+        dlog(`[文件处理] ⛔ 跳过文件（找不到）: ${href}`);
+        processed++; setProgress((processed / total) * 100); continue; 
+      }
       try {
         let s = await fileEntry.async('string');
+        dlog(`[文件处理] ✓ 读取成功，大小: ${s.length} 字符`);
+        
         if (stripNavPages.has(href)) {
+          dlog(`[文件处理] 🔧 剥离导航块...`);
           s = stripTocNav(s);
         }
         // prepare id set for this chapter if we have toc targets pointing inside
@@ -758,6 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const idSet = new Set(chTargets.filter(t => t.fragment).map(t => t.fragment));
         let res = await extractTextFromXhtmlWithAnchors(s, idSet, zip, href);
         let { text: chapterText, anchors } = res || { text: '', anchors: new Map() };
+        dlog(`[文件处理] ✓ 提取文本: ${chapterText.length} 字符, 前100字: ${chapterText.slice(0, 100).replace(/\n/g, '\\n')}...`);
         // 目录与正文混页的安全兜底：如果章节文本以“目录/Contents…”标题开头，剥掉这些头部行
         if (stripNavPages.has(href)) {
           const headStripRe = /^(\s*(目录|目錄|目次|contents?|table\s*of\s*contents?|sommaire|indice|índice)\s*(\r?\n|\n))+\s*/i;
@@ -809,6 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
         processedPaths.push(href);
         const bytesAdded = encoder.encode(processedSegment).length;
         segments.push({ text: processedSegment, bytes: bytesAdded });
+        dlog(`[文件处理] ✅ 添加到输出: ${href}, 字节数: ${bytesAdded}`);
         try {
           const preview = (processedSegment && processedSegment.length > 200) ? processedSegment.slice(0, 200).replace(/\n/g, '\\n') + '...' : (processedSegment || '').replace(/\n/g, '\\n');
           dlog(`[EPUBDbg] ${href} bytesAdded=${bytesAdded}, preview='${preview}'`);
@@ -839,7 +872,10 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
         cumulativeBytes += bytesAdded;
-      } catch (e) { log('读取条目失败: ' + (item.href || '') + ' -> ' + (e && e.message)); }
+      } catch (e) { 
+        log('读取条目失败: ' + (item.href || '') + ' -> ' + (e && e.message)); 
+        dlog(`[文件处理] ❌ 异常: ${href} - ${e && e.message}\n${e && e.stack}`);
+      }
       processed++; if (onProgress) onProgress(processed / total); setProgress((processed / total) * 100);
     }
     // finalize output (initial, still包含目录前缀)
@@ -880,13 +916,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // 规则：从 tocEntriesAll 中找到第一个非目录标题且不在 standaloneTocFiles 的项；其章节起点字节 chapterStartBytes 为正文起点
     const titleKeywordsRePre = /^(目录|目錄|目次|contents?|table\s*of\s*contents?|sommaire|indice|índice)$/i;
     let removalBytes = 0; // 需裁剪的前缀字节长度
-    for (const e of tocEntriesAll) {
-      const resolved = canonicalPath(baseOpf, e.hrefPath, zip);
-      const title = (e.title || '').trim();
-      if (titleKeywordsRePre.test(title)) continue; // 跳过目录标题
-      // 选择章节起点而非锚点位置，确保整个目录块都被裁掉
-      const startByte = chapterStartBytes.get(resolved);
-      if (startByte != null) { removalBytes = startByte; dlog('正文起点章节: ' + resolved + '；裁剪前缀字节: ' + startByte); break; }
+    const shouldTrimPrefix = tocEntriesAll.length >= 3 || standaloneTocFiles.size > 0;
+    dlog(`[前缀裁剪] TOC条目数: ${tocEntriesAll.length}, 整页目录数: ${standaloneTocFiles.size}, 是否执行裁剪: ${shouldTrimPrefix}`);
+    
+    if (shouldTrimPrefix) {
+      for (const e of tocEntriesAll) {
+        const resolved = canonicalPath(baseOpf, e.hrefPath, zip);
+        const title = (e.title || '').trim();
+        if (titleKeywordsRePre.test(title)) continue; // 跳过目录标题
+        // 选择章节起点而非锚点位置，确保整个目录块都被裁掉
+        const startByte = chapterStartBytes.get(resolved);
+        if (startByte != null) { removalBytes = startByte; dlog('正文起点章节: ' + resolved + '；裁剪前缀字节: ' + startByte); break; }
+      }
+    } else {
+      dlog('[前缀裁剪] 跳过裁剪：TOC 不完整或无整页目录，保留所有内容');
     }
     // 回退方案：若未从 TOC 中找到首个非目录章节，但已识别出整页目录文件，则以“第一个非整页目录的 spine 项”为正文起点
     if (removalBytes === 0 && standaloneTocFiles.size > 0) {
