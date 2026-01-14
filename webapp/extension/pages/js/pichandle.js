@@ -267,57 +267,134 @@
 
         // copy + process
         if(dither === 'floyd'){
-            // simple Floyd–Steinberg dithering on luminance
-            const lum = new Float32Array(w*h);
-            for(let y=0;y<h;y++){
-                for(let x=0;x<w;x++){
-                    const i = (y*w+x)*4;
-                    const r = src.data[i], g = src.data[i+1], b = src.data[i+2];
-                    let v = 0.2126*r + 0.7152*g + 0.0722*b;
-                    if(gray === 'none') v = (r+g+b)/3;
-                    lum[y*w+x] = v;
-                }
-            }
-            for(let y=0;y<h;y++){
-                for(let x=0;x<w;x++){
-                    const idx = y*w+x;
-                    const oldv = lum[idx];
-                    let newv;
-                    if(levels === 2){
-                        newv = oldv < threshold ? 0 : 255;
-                    } else {
-                        const q = Math.round((levels - 1) * (oldv / 255));
-                        newv = (levels > 1) ? (q * (255 / (levels - 1))) : oldv;
+            // Floyd–Steinberg dithering
+            if(gray === 'none'){
+                // 彩色抖动：对RGB三个通道分别进行Floyd-Steinberg抖动
+                const rChannel = new Float32Array(w*h);
+                const gChannel = new Float32Array(w*h);
+                const bChannel = new Float32Array(w*h);
+                
+                // 初始化通道数据
+                for(let y=0;y<h;y++){
+                    for(let x=0;x<w;x++){
+                        const i = (y*w+x)*4;
+                        rChannel[y*w+x] = src.data[i];
+                        gChannel[y*w+x] = src.data[i+1];
+                        bChannel[y*w+x] = src.data[i+2];
                     }
-                    const err = oldv - newv;
-                    lum[idx] = newv;
-                    if(x+1 < w) lum[idx+1] += err * 7/16;
-                    if(x-1 >=0 && y+1 < h) lum[idx + w -1] += err * 3/16;
-                    if(y+1 < h) lum[idx + w] += err * 5/16;
-                    if(x+1 < w && y+1 < h) lum[idx + w +1] += err * 1/16;
                 }
-            }
-            for(let y=0;y<h;y++){
-                for(let x=0;x<w;x++){
-                    const i = (y*w+x)*4;
-                    const v = (levels === 2) ? (lum[y*w+x] < 128 ? 0 : 255) : Math.max(0, Math.min(255, Math.round(lum[y*w+x])));
-                    out.data[i]=out.data[i+1]=out.data[i+2]=v;
-                    out.data[i+3]=255;
+                
+                // 对每个通道应用Floyd-Steinberg抖动
+                const channels = [rChannel, gChannel, bChannel];
+                for(const channel of channels){
+                    for(let y=0;y<h;y++){
+                        for(let x=0;x<w;x++){
+                            const idx = y*w+x;
+                            const oldv = channel[idx];
+                            let newv;
+                            if(levels === 2){
+                                newv = oldv < threshold ? 0 : 255;
+                            } else {
+                                const q = Math.round((levels - 1) * (oldv / 255));
+                                newv = (levels > 1) ? (q * (255 / (levels - 1))) : oldv;
+                            }
+                            const err = oldv - newv;
+                            channel[idx] = newv;
+                            if(x+1 < w) channel[idx+1] += err * 7/16;
+                            if(x-1 >=0 && y+1 < h) channel[idx + w -1] += err * 3/16;
+                            if(y+1 < h) channel[idx + w] += err * 5/16;
+                            if(x+1 < w && y+1 < h) channel[idx + w +1] += err * 1/16;
+                        }
+                    }
+                }
+                
+                // 写入输出
+                for(let y=0;y<h;y++){
+                    for(let x=0;x<w;x++){
+                        const i = (y*w+x)*4;
+                        const idx = y*w+x;
+                        out.data[i] = Math.max(0, Math.min(255, Math.round(rChannel[idx])));
+                        out.data[i+1] = Math.max(0, Math.min(255, Math.round(gChannel[idx])));
+                        out.data[i+2] = Math.max(0, Math.min(255, Math.round(bChannel[idx])));
+                        out.data[i+3] = 255;
+                    }
+                }
+            } else {
+                // 灰度抖动：使用亮度值进行Floyd-Steinberg抖动
+                const lum = new Float32Array(w*h);
+                for(let y=0;y<h;y++){
+                    for(let x=0;x<w;x++){
+                        const i = (y*w+x)*4;
+                        const r = src.data[i], g = src.data[i+1], b = src.data[i+2];
+                        let v = 0.2126*r + 0.7152*g + 0.0722*b;
+                        lum[y*w+x] = v;
+                    }
+                }
+                for(let y=0;y<h;y++){
+                    for(let x=0;x<w;x++){
+                        const idx = y*w+x;
+                        const oldv = lum[idx];
+                        let newv;
+                        if(levels === 2){
+                            newv = oldv < threshold ? 0 : 255;
+                        } else {
+                            const q = Math.round((levels - 1) * (oldv / 255));
+                            newv = (levels > 1) ? (q * (255 / (levels - 1))) : oldv;
+                        }
+                        const err = oldv - newv;
+                        lum[idx] = newv;
+                        if(x+1 < w) lum[idx+1] += err * 7/16;
+                        if(x-1 >=0 && y+1 < h) lum[idx + w -1] += err * 3/16;
+                        if(y+1 < h) lum[idx + w] += err * 5/16;
+                        if(x+1 < w && y+1 < h) lum[idx + w +1] += err * 1/16;
+                    }
+                }
+                for(let y=0;y<h;y++){
+                    for(let x=0;x<w;x++){
+                        const i = (y*w+x)*4;
+                        const v = (levels === 2) ? (lum[y*w+x] < 128 ? 0 : 255) : Math.max(0, Math.min(255, Math.round(lum[y*w+x])));
+                        out.data[i]=out.data[i+1]=out.data[i+2]=v;
+                        out.data[i+3]=255;
+                    }
                 }
             }
         } else {
             for(let i=0;i<src.data.length;i+=4){
                 const r = src.data[i], g = src.data[i+1], b = src.data[i+2];
-                let lumv = 0.2126*r + 0.7152*g + 0.0722*b;
-                if(gray === 'none') lumv = (r+g+b)/3;
-                let v;
-                if(levels === 2){
-                    v = lumv < threshold ? 0 : 255;
+                
+                if(gray === 'none') {
+                    // 保留彩色：对每个通道分别进行量化处理
+                    let rOut, gOut, bOut;
+                    if(levels === 2){
+                        // 二值化：使用阈值
+                        rOut = r < threshold ? 0 : 255;
+                        gOut = g < threshold ? 0 : 255;
+                        bOut = b < threshold ? 0 : 255;
+                    } else {
+                        // 多级量化：对每个颜色通道单独量化
+                        const qr = Math.round((levels - 1) * (r / 255));
+                        const qg = Math.round((levels - 1) * (g / 255));
+                        const qb = Math.round((levels - 1) * (b / 255));
+                        rOut = (levels > 1) ? (qr * (255 / (levels - 1))) : r;
+                        gOut = (levels > 1) ? (qg * (255 / (levels - 1))) : g;
+                        bOut = (levels > 1) ? (qb * (255 / (levels - 1))) : b;
+                    }
+                    out.data[i] = Math.max(0, Math.min(255, Math.round(rOut)));
+                    out.data[i+1] = Math.max(0, Math.min(255, Math.round(gOut)));
+                    out.data[i+2] = Math.max(0, Math.min(255, Math.round(bOut)));
                 } else {
-                    const q = Math.round((levels - 1) * (lumv / 255));
-                    v = (levels > 1) ? (q * (255 / (levels - 1))) : lumv;
+                    // 灰度模式：使用亮度值
+                    let lumv = 0.2126*r + 0.7152*g + 0.0722*b;
+                    let v;
+                    if(levels === 2){
+                        v = lumv < threshold ? 0 : 255;
+                    } else {
+                        const q = Math.round((levels - 1) * (lumv / 255));
+                        v = (levels > 1) ? (q * (255 / (levels - 1))) : lumv;
+                    }
+                    v = Math.max(0, Math.min(255, Math.round(v)));
+                    out.data[i]=out.data[i+1]=out.data[i+2]=v;
                 }
-                out.data[i]=out.data[i+1]=out.data[i+2]=Math.max(0, Math.min(255, Math.round(v)));
                 out.data[i+3]=255;
             }
         }
