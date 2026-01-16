@@ -1654,6 +1654,11 @@ bool saveBookmarkForFile(const BookHandle *book)
                   book->filePath().c_str(), book->getCurrentPageIndex(), book->position());
 #endif
 
+    // 在写入新的 bm 文件之前，先读取旧的阅读时长（用于计算增量）
+    BookmarkConfig old_cfg = loadBookmarkForFile(book->filePath());
+    int16_t old_hour = old_cfg.valid ? old_cfg.readhour : 0;
+    int16_t old_min = old_cfg.valid ? old_cfg.readmin : 0;
+
     // .bm 文件记录当前阅读位置，应该实时更新，不受"最大进度保护"约束
     // "最大进度保护"仅适用于 .tags 文件的第一个（auto）标签
 
@@ -1693,11 +1698,6 @@ bool saveBookmarkForFile(const BookHandle *book)
     if (ok)
     {
         std::string rec_fn = getRecordFileName(book->filePath());
-        
-        // 读取旧的 bm 获取之前的阅读时长
-        BookmarkConfig old_cfg = loadBookmarkForFile(book->filePath());
-        int16_t old_hour = old_cfg.valid ? old_cfg.readhour : 0;
-        int16_t old_min = old_cfg.valid ? old_cfg.readmin : 0;
         
         int16_t new_hour = book->getReadHour();
         int16_t new_min = book->getReadMin();
