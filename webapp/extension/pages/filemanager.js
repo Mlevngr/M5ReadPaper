@@ -190,7 +190,7 @@
         <td class='file-actions nowrap'>
           ${f.type==='file'?`<a href='${API_BASE}/download?path=${encodeURIComponent(fullPath)}' class='button is-small outline' title='下载'>下载</a>`:''}
           <button class='button is-small outline' data-del='${fullPath}' ${disableDelete?'disabled':''}>删除</button>
-          ${currentCat==='book' && f.type==='file'?`<button class='button is-small outline' data-record='${fullPath}' title='查看阅读记录'>阅读记录</button>`:''}
+          ${currentCat==='book' && f.type==='file'?`<button class='button is-small outline' data-record='${fullPath}' title='查看阅读记录'>记录</button>`:''}
         </td>
       </tr>`;
     }).join('');

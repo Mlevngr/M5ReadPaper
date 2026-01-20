@@ -657,7 +657,8 @@ function renderFullRecordList(data) {
 
                 const label = document.createElement('div');
                 label.className = 'hour-label';
-                label.textContent = minutes > 0 ? `${hour}h` : hour;
+                // 不再在有阅读记录时添加 'h' 后缀，统一显示小时数字
+                label.textContent = `${hour}`;
                 
                 // If opacity < 0.4, use black text for better readability
                 if (minutes > 0 && opacity < 0.4) {
