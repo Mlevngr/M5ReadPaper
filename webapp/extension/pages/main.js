@@ -55,10 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const edcBlackInput = document.getElementById('edcBlack');
   const edcBlackValue = document.getElementById('edcBlackValue');
   const v3ThresholdControls = document.getElementById('v3ThresholdControls');
-  const v3WhiteInput = document.getElementById('v3White');
-  const v3WhiteValue = document.getElementById('v3WhiteValue');
-  const v3GrayInput = document.getElementById('v3Gray');
-  const v3GrayValue = document.getElementById('v3GrayValue');
+  const v3LowInput = document.getElementById('v3RangeLow');
+  const v3HighInput = document.getElementById('v3RangeHigh');
+  const v3LowValue = document.getElementById('v3LowValue');
+  const v3HighValue = document.getElementById('v3HighValue');
   const sizeLabel = document.querySelector('label[for="size"]');
   const exportProgmemCheckbox = document.getElementById('export_progmem');
   const exportOptionsSection = document.getElementById('exportOptions');
@@ -170,9 +170,73 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bilateralRadiusInput) bilateralRadiusInput.addEventListener('input', () => { try { const f = getCurrentFontFile(); if (f) schedulePreview(f); } catch (e) {} });
     if (bilateralSigmaSpaceInput) bilateralSigmaSpaceInput.addEventListener('input', () => { try { const f = getCurrentFontFile(); if (f) schedulePreview(f); } catch (e) {} });
     if (bilateralSigmaRangeInput) bilateralSigmaRangeInput.addEventListener('input', () => { try { const f = getCurrentFontFile(); if (f) schedulePreview(f); } catch (e) {} });
-    // V3 threshold controls -> preview updates
-    if (v3WhiteInput) v3WhiteInput.addEventListener('input', () => { try { setV3ThresholdDisplays(); const f = getCurrentFontFile(); if (f) schedulePreview(f); } catch (e) {} });
-    if (v3GrayInput) v3GrayInput.addEventListener('input', () => { try { setV3ThresholdDisplays(); const f = getCurrentFontFile(); if (f) schedulePreview(f); } catch (e) {} });
+    // V3 双滑块控件 - 左右并列布局，保持灰色<白色约束
+    const updateV3Range = () => {
+      try {
+        let low = parseInt(v3LowInput.value, 10);
+        let high = parseInt(v3HighInput.value, 10);
+        // 强制约束：灰色阈值 < 白色阈值
+        if (low >= high) {
+          v3LowInput.value = String(Math.max(10, high - 1));
+        }
+        setV3ThresholdDisplays();
+        const f = getCurrentFontFile();
+        if (f) schedulePreview(f);
+      } catch (e) {}
+    };
+
+    if (v3LowInput) {
+      v3LowInput.addEventListener('input', updateV3Range);
+    }
+    
+    if (v3HighInput) {
+      v3HighInput.addEventListener('input', () => {
+        try {
+          let low = parseInt(v3LowInput.value, 10);
+          let high = parseInt(v3HighInput.value, 10);
+          // 强制约束：白色阈值 > 灰色阈值
+          if (high <= low) {
+            v3HighInput.value = String(Math.min(254, low + 1));
+          }
+          setV3ThresholdDisplays();
+          const f = getCurrentFontFile();
+          if (f) schedulePreview(f);
+        } catch (e) {}
+      });
+    }
+
+    // 数字输入框监听 - 输入框改变时同步到滑块
+    if (v3LowValue) {
+      v3LowValue.addEventListener('change', () => {
+        try {
+          let val = parseInt(v3LowValue.value, 10);
+          if (isNaN(val)) val = 10;
+          val = Math.max(10, Math.min(254, val));
+          const high = parseInt(v3HighInput.value, 10);
+          if (val >= high) val = Math.max(10, high - 1);
+          v3LowInput.value = String(val);
+          v3LowValue.value = String(val);
+          const f = getCurrentFontFile();
+          if (f) schedulePreview(f);
+        } catch (e) {}
+      });
+    }
+
+    if (v3HighValue) {
+      v3HighValue.addEventListener('change', () => {
+        try {
+          let val = parseInt(v3HighValue.value, 10);
+          if (isNaN(val)) val = 254;
+          val = Math.max(10, Math.min(254, val));
+          const low = parseInt(v3LowInput.value, 10);
+          if (val <= low) val = Math.min(254, low + 1);
+          v3HighInput.value = String(val);
+          v3HighValue.value = String(val);
+          const f = getCurrentFontFile();
+          if (f) schedulePreview(f);
+        } catch (e) {}
+      });
+    }
     // Otsu control: re-render preview when toggled and disable threshold slider
     let useOtsuEl = document.getElementById('use_otsu');
     // otsu_denoise control removed per UI simplification
@@ -418,19 +482,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getV3Thresholds() {
-    const whiteVal = parseInt(v3WhiteInput?.value || '200', 10);
-    const grayVal = parseInt(v3GrayInput?.value || '120', 10);
+    // white threshold should be the higher value, gray threshold the lower
+    const high = parseInt(v3HighInput?.value || '200', 10);
+    const low = parseInt(v3LowInput?.value || '120', 10);
+    const whiteVal = Math.max(high, low);
+    const grayVal = Math.min(high, low);
     return { white: whiteVal, gray: grayVal };
   }
 
   function setV3ThresholdDisplays() {
-    if (v3WhiteValue && v3WhiteInput) v3WhiteValue.textContent = String(v3WhiteInput.value);
-    if (v3GrayValue && v3GrayInput) v3GrayValue.textContent = String(v3GrayInput.value);
+    if (v3HighValue && v3HighInput) v3HighValue.value = String(v3HighInput.value);
+    if (v3LowValue && v3LowInput) v3LowValue.value = String(v3LowInput.value);
   }
 
   function setEdcThresholdDisplays() {
-    if (edcWhiteValue && edcWhiteInput) edcWhiteValue.textContent = String(edcWhiteInput.value);
-    if (edcBlackValue && edcBlackInput) edcBlackValue.textContent = String(edcBlackInput.value);
+    if (edcWhiteValue && edcWhiteInput) edcWhiteValue.value = String(edcWhiteInput.value);
+    if (edcBlackValue && edcBlackInput) edcBlackValue.value = String(edcBlackInput.value);
   }
 
   function applyFirmwareUiState() {
@@ -844,6 +911,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (f) schedulePreview(f);
       });
     }
+    // 数字输入框监听 - 允许直接输入白/黑阈值并同步到滑块
+    if (edcWhiteValue) {
+      edcWhiteValue.addEventListener('change', () => {
+        try {
+          let val = parseInt(edcWhiteValue.value, 10);
+          if (isNaN(val)) val = parseInt(edcWhiteInput.min || '16', 10);
+          const min = parseInt(edcWhiteInput.min || '16', 10);
+          const max = parseInt(edcWhiteInput.max || '48', 10);
+          val = Math.max(min, Math.min(max, val));
+          edcWhiteInput.value = String(val);
+          edcWhiteValue.value = String(val);
+          if (currentFirmwareMode === FIRMWARE_MODES.EDC) {
+            const f = getCurrentFontFile(); if (f) schedulePreview(f);
+          }
+        } catch (e) {}
+      });
+    }
+    if (edcBlackValue) {
+      edcBlackValue.addEventListener('change', () => {
+        try {
+          let val = parseInt(edcBlackValue.value, 10);
+          if (isNaN(val)) val = parseInt(edcBlackInput.min || '207', 10);
+          const min = parseInt(edcBlackInput.min || '207', 10);
+          const max = parseInt(edcBlackInput.max || '239', 10);
+          val = Math.max(min, Math.min(max, val));
+          edcBlackInput.value = String(val);
+          edcBlackValue.value = String(val);
+          if (currentFirmwareMode === FIRMWARE_MODES.EDC) {
+            const f = getCurrentFontFile(); if (f) schedulePreview(f);
+          }
+        } catch (e) {}
+      });
+    }
   } catch (e) { /* ignore */ }
 
   if (firmwareSelect) {
@@ -861,6 +961,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (f) schedulePreview(f);
     });
   }
+
+  // Initialize current firmware mode from the select's current value
+  try {
+    if (firmwareSelect) {
+      const valInit = String(firmwareSelect.value || '').toLowerCase();
+      if (valInit === FIRMWARE_MODES.EDC) currentFirmwareMode = FIRMWARE_MODES.EDC;
+      else if (valInit === FIRMWARE_MODES.READPAPER_V3) currentFirmwareMode = FIRMWARE_MODES.READPAPER_V3;
+      else currentFirmwareMode = FIRMWARE_MODES.READPAPER;
+    }
+  } catch (e) { /* ignore */ }
 
   applyFirmwareUiState();
 

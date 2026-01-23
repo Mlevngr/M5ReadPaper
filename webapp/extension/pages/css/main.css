@@ -359,6 +359,201 @@ progress::-moz-progress-bar,
   width: 100%;
 }
 
+/* V3 并列滑块样式（由 SCSS 控制，避免手动修改编译后的 main.css） */
+.dual-range-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #e0e0e0;
+  outline: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* 轨道 */
+.dual-range-input::-webkit-slider-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.dual-range-input::-moz-range-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.dual-range-input::-ms-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* 方形滑块：矩形外观，微调位置向下 1px */
+.dual-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  -webkit-transition: all 0.15s ease;
+  transition: all 0.15s ease;
+  margin-top: -2px; /* 向下移动 1px（相较于之前的 -7px） */
+}
+
+.dual-range-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(240, 79, 15, 0.4);
+}
+
+.dual-range-input::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+  background: var(--color-primary);
+  border-color: #c03d0c;
+}
+
+.dual-range-input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  -moz-transition: all 0.15s ease;
+  transition: all 0.15s ease;
+  transform: translateY(1px); /* Firefox 下向下偏移 1px */
+}
+
+.dual-range-input::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(240, 79, 15, 0.4);
+}
+
+.dual-range-input::-moz-range-thumb:active {
+  transform: scale(1.05);
+  background: var(--color-primary);
+  border-color: #c03d0c;
+}
+
+.dual-range-input::-ms-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  margin-top: -6px; /* IE/Edge 微调 */
+}
+
+.dual-range-input:focus {
+  outline: none;
+}
+
+.dual-range-input:focus::-webkit-slider-thumb,
+.dual-range-input:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(240, 79, 15, 0.2), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* EDC Book 的滑块样式与 V3 统一（仅样式） */
+#edcThresholdControls input[type=range] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #e0e0e0;
+  outline: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#edcThresholdControls input[type=range]::-webkit-slider-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+#edcThresholdControls input[type=range]::-moz-range-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+#edcThresholdControls input[type=range]::-ms-track {
+  background: #e0e0e0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+#edcThresholdControls input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  -webkit-transition: all 0.15s ease;
+  transition: all 0.15s ease;
+  margin-top: -2px;
+}
+
+#edcThresholdControls input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(240, 79, 15, 0.4);
+}
+
+#edcThresholdControls input[type=range]::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+  background: var(--color-primary);
+  border-color: #c03d0c;
+}
+
+#edcThresholdControls input[type=range]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  -moz-transition: all 0.15s ease;
+  transition: all 0.15s ease;
+  transform: translateY(1px);
+}
+
+#edcThresholdControls input[type=range]::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(240, 79, 15, 0.4);
+}
+
+#edcThresholdControls input[type=range]::-moz-range-thumb:active {
+  transform: scale(1.05);
+  background: var(--color-primary);
+  border-color: #c03d0c;
+}
+
+#edcThresholdControls input[type=range]::-ms-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  margin-top: -6px;
+}
+
 /* Reduce rounded corners for controls to match the flat progress bar aesthetic */
 .white-control .button.is-small.outline {
   border-radius: 2px;
