@@ -236,10 +236,14 @@ bool show_reading_menu(M5Canvas *canvas, bool refresh)
     // bin_font_print(name_with_page, 21, 0, 540, 0, 770, false, nullptr, TEXT_ALIGN_CENTER); // 0.7f * 30 = 21
     //  Top
     bin_font_print(name_with_page, 21, 0, 540, 0, 5, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.7f * 30 = 21
-
-    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", cur_page, total_page);
+    snprintf(name_with_page, sizeof(name_with_page), "%zu", cur_page);
     // 页码
-    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_page);
+    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+
+    canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
 
     // sync target_page
     target_page = cur_page;
@@ -265,8 +269,8 @@ bool show_reading_menu(M5Canvas *canvas, bool refresh)
 
     // 获取阅读时间记录
 
-   // bin_font_print("已读 ", 24, 0, 50, 310, 146, false, nullptr, TEXT_ALIGN_LEFT, 120, true, true, false, true);
-    bin_font_print("已读 ", 28, 15, 50, 300, 144, false, nullptr, TEXT_ALIGN_LEFT, 120);
+    // bin_font_print("已读 ", 24, 0, 50, 310, 146, false, nullptr, TEXT_ALIGN_LEFT, 120, true, true, false, true);
+    bin_font_print("已读 ", 28, 0, 50, 300, 144, false, nullptr, TEXT_ALIGN_LEFT, 120, false, false, false, true);
     // 已读时间小时数/分钟数：从当前打开的 BookHandle 获取，若无则显示 0:00
     char read_hour_str[16] = "0";
     char read_min_str[8] = "00";
@@ -288,11 +292,11 @@ bool show_reading_menu(M5Canvas *canvas, bool refresh)
         snprintf(read_min_str, sizeof(read_min_str), "%02d", rm);
     }
     // 已读时间小时数
-    bin_font_print(read_hour_str, 28, 0, 80, 365,144 , true, nullptr, TEXT_ALIGN_CENTER, 80);
+    bin_font_print(read_hour_str, 28, 0, 80, 365, 144, true, nullptr, TEXT_ALIGN_CENTER, 80);
     //    bin_font_print(":", 24, 0, 120, 440, 146, true, nullptr, TEXT_ALIGN_CENTER, 30);
     // 已读时间分钟数
     // bin_font_print(read_min_str, 24, 0, 80, 452, 146, false, nullptr, TEXT_ALIGN_CENTER, 80, true, false, false, true);
-    bin_font_print(read_min_str, 28, 15, 80, 452, 144, false, nullptr, TEXT_ALIGN_CENTER, 80);
+    bin_font_print(read_min_str, 28, 0, 80, 452, 144, false, nullptr, TEXT_ALIGN_CENTER, 80, false, false, false, true);
 
     // 0间
     // 获取当前时间
@@ -373,13 +377,14 @@ void draw_button(M5Canvas *canvas, int16_t cx, int16_t cy, const char *text, boo
     }
 
     // 文字颜色：反色时用白（15），否则用黑（0）
-    int text_color = inverted ? 15 : 0;
+    //    int text_color = inverted ? 15 : 0;
+    int text_color = 0;
     bool fastmode = inverted ? false : true;
     // 字体大小和可用宽度也按 ratio 缩放
     uint8_t font_size = (uint8_t)std::max(1, (int)roundf(32.0f * ratio));
     int16_t area_width = (int16_t)std::max(1, (int)(160 * ratio));
     int16_t max_length = area_width;
-    bin_font_print(text, font_size, text_color, area_width, cx, cy - (int16_t)roundf(4.0f * ratio), fastmode, canvas, TEXT_ALIGN_CENTER, max_length);
+    bin_font_print(text, font_size, text_color, area_width, cx, cy - (int16_t)roundf(4.0f * ratio), fastmode, canvas, TEXT_ALIGN_CENTER, max_length, false, false, false, inverted);
 }
 
 void draw_label(M5Canvas *canvas, int16_t cx, int16_t cy, const char *text, bool inverted, bool second)
@@ -423,7 +428,7 @@ void drawTopUI(M5Canvas *canvas, int16_t x, int16_t y)
 
     // 2. 锁屏书签复选框
     bool showLabel = (g_current_book && g_current_book->getShowLabel());
-    drawCheckbox(canvas, x + 42, y + 60, showLabel, "锁屏书签",30);
+    drawCheckbox(canvas, x + 42, y + 60, showLabel, "锁屏书签", 30);
 
     // 2.5. 下划线复选框（移到右上位置）
     if (g_current_book)
@@ -437,14 +442,14 @@ void drawTopUI(M5Canvas *canvas, int16_t x, int16_t y)
     if (g_current_book)
     {
         bool keepOrg = g_current_book->getKeepOrg();
-        drawCheckbox(canvas, x + 42, y + 240, keepOrg, "跳过繁简转换",30);
+        drawCheckbox(canvas, x + 42, y + 240, keepOrg, "跳过繁简转换", 30);
     }
 
     // 在下划线右边添加竖排显示开关
     if (g_current_book)
     {
         // 竖排显示开关的位置
-        const int16_t switch_x = x+42 + 270;
+        const int16_t switch_x = x + 42 + 270;
         const int16_t switch_y = 244;
 
         // 绘制竖排显示开关
@@ -478,14 +483,13 @@ void drawTopUI(M5Canvas *canvas, int16_t x, int16_t y)
 
     // 4. 顶部分隔线
     canvas->drawLine(x, y + 110, x + 540, y + 110, TFT_BLACK);
-    
 
     // 4.5 时间窗口
-    //canvas->fillRect(300, 140, 65, 38, TFT_BLACK);
-    canvas->fillRect(280, y+ 130, 85, 60, TFT_BLACK);
-    canvas->drawRect(365, y+130, 175, 60, TFT_BLACK);
-    canvas->fillRect(452, y+130, 88, 60, TFT_BLACK);
- 
+    // canvas->fillRect(300, 140, 65, 38, TFT_BLACK);
+    canvas->fillRect(280, y + 130, 85, 60, TFT_BLACK);
+    canvas->drawRect(365, y + 130, 175, 60, TFT_BLACK);
+    canvas->fillRect(452, y + 130, 88, 60, TFT_BLACK);
+
     // 5. 大矩形框
     canvas->fillRect(x + 40, y + 130, 230, 60, TFT_BLACK);
     canvas->fillRect(x + 42, y + 132, 226, 56, TFT_WHITE);
@@ -567,7 +571,13 @@ void drawBottomUI(M5Canvas *canvas, int16_t x, int16_t y)
     // Move the space
     drawSwitch(canvas, x + 40, y + 38, g_config.dark, "深色模式", 30);
     // dark 模式下快刷开关显示为灰色（不可修改）
-    drawSwitch(canvas, x + 260, y + 38, g_config.fastrefresh, "快刷模式", 30, g_config.dark ? 8 : 0);
+    // drawSwitch(canvas, x + 260, y + 38, g_config.fastrefresh, "快刷模式", 30, g_config.dark ? 8 : 0);
+    drawSwitch(canvas, x + 260, y + 38, g_config.fastrefresh, "快刷模式", 30, 0);
+    // Delete Line in darkmode
+    if (g_config.dark)
+    {
+        canvas->drawWideLine(x + 260, y + 53, x + 260 + 190, y + 53, 1.5f, TFT_BLACK);
+    }
 
     // 5. 书签目录相关
     /*
@@ -582,8 +592,7 @@ void drawBottomUI(M5Canvas *canvas, int16_t x, int16_t y)
     canvas->fillCircle(x + 450 + 45, y + 50, 22, TFT_BLACK);
     canvas->fillCircle(x + 450 + 45, y + 50, 20, TFT_WHITE);
     canvas->fillCircle(x + 450 + 45, y + 50, 18, TFT_BLACK);
-    // bin_font_print("?", 32, 0, 50, x + 450 + 22, y + 50 - 16, false, canvas, TEXT_ALIGN_CENTER, 80, true, false, false, true);
-    bin_font_print("?", 32, 15, 50, x + 450 + 45 - 25, y + 50 - 18, false, canvas, TEXT_ALIGN_CENTER, 80);
+    bin_font_print("?", 32, 0, 50, x + 450 + 22, y + 50 - 16, false, canvas, TEXT_ALIGN_CENTER, 80, true, false, false, true);
 
     // ROW II
     y = y + 100;

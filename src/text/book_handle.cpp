@@ -3103,7 +3103,8 @@ void BookHandle::renderCurrentPage(float font_size_param, M5Canvas *canvas, bool
         {
             // 将页面索引转换为字符串再打印，避免将 size_t 传递为字符串参数
             std::string page_num = std::to_string(current_page_index + 1);
-            bin_font_print(page_num.c_str(), 20, 0, PAPER_S3_WIDTH - 5, 0, 920 + 15, true, nullptr, TEXT_ALIGN_RIGHT, 0, true, false, false, dark);
+            //bin_font_print(page_num.c_str(), 20, 0, PAPER_S3_WIDTH - 5, 0, 920 + 15, true, nullptr, TEXT_ALIGN_RIGHT, 0, true, false, false, dark);
+            bin_font_print(page_num.c_str(), 20, 0, PAPER_S3_WIDTH - 5, 0, 920 + 15, false, nullptr, TEXT_ALIGN_RIGHT,0, true,false,false,dark); 
         }
         // 计算阅读进度
         float progress = (float)(current_page_index + 1) / (float)page_positions.size();
