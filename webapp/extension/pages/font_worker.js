@@ -40,9 +40,23 @@ self.onmessage = async (e) => {
   const effectiveBlack = isEdcFirmware ? ((typeof blackThreshold === 'number') ? blackThreshold : 223) : null;
   const edcBlack = isEdcFirmware ? Math.max(effectiveWhite + 1, Math.min(239, effectiveBlack ?? 223)) : null;
 
-  // canvas size per glyph (generous)
+  // 计算字体的实际 ascender 和 descender（从字体表中读取）
+  // 优先使用 OS/2 表的 Typo 值，因为它们最准确
+  let rawAscender = font.tables.os2?.sTypoAscender ?? font.tables.hhea?.ascender ?? font.ascender ?? Math.floor(font.unitsPerEm * 0.8);
+  let rawDescender = Math.abs(font.tables.os2?.sTypoDescender ?? font.tables.hhea?.descender ?? font.descender ?? Math.floor(font.unitsPerEm * 0.2));
+  
+  // 缩放到像素单位
+  const ascenderPx = Math.ceil(rawAscender * scale);
+  const descenderPx = Math.ceil(rawDescender * scale);
+  
+  // Canvas 高度：确保至少是 size * 2.5 以容纳所有字形
+  // 同时使用字体度量值作为参考
+  const metricsH = Math.ceil((ascenderPx + descenderPx) * 1.3);
+  const minH = Math.ceil(size * 2.5);
+  const H = Math.max(metricsH, minH);
+  
+  // Canvas 宽度保持不变
   const W = Math.ceil(size * 3);
-  const H = Math.ceil(size * 2.2);
 
     const entries = [];
     const bmpParts = [];
@@ -118,29 +132,17 @@ self.onmessage = async (e) => {
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#000';
 
-  // FreeType uses face.size.ascender >> 6 after set_pixel_sizes().
-  // In OpenType.js, we need to compute ascender using unitsPerEm scaling,
-  // then apply floor (equivalent to >>6 truncation) to match FreeType's integer metrics.
-  // 
-  // Key insight: FreeType's bitmap_top is the distance from baseline to top of rendered bitmap.
-  // We need to replicate this by:
-  // 1. Computing ascender using the same source as FreeType (prefer hhea.ascender)
-  // 2. Using integer truncation (floor) for all metrics to match >> 6 behavior
-  // 3. Carefully computing bitmap_top from the actual rendered content bounds
-
-  // CRITICAL: FreeType's face.size.ascender is computed after scaling and hinting,
-  // and doesn't directly correspond to raw font table values.
-  // From empirical testing with FreeType:
-  // - For size=32, ascender ≈ 28 (ratio ≈ 0.875)
-  // - For size=60, ascender ≈ 52 (ratio ≈ 0.867)
-  // 
-  // We use the empirical formula: ascender ≈ size * 0.875
-  const ascender_px = Math.floor(size * 0.875);
+      // 计算 baseline 位置：从 canvas 顶部向下足够的距离
+      // 确保有足够空间容纳超出 ascender 的字形部分（如某些装饰性字体）
+      // baseline = ascenderPx + 额外缓冲
+      const baselineY = Math.floor(ascenderPx * 1.15) + Math.floor(size * 0.1);
+      const y = baselineY;
   
-  // Pen position: use a fixed x position, and baseline at ascender_px
-  // FreeType renders with baseline at 0, then measures bitmap_top from there
-  const x = Math.floor(size * 0.6);
-  const y = ascender_px;
+      // 使用 FreeType 风格的 ascender（floor 截断）以匹配设备端
+      const ascender_px = Math.floor(size * 0.875);
+  
+      // Pen position: use a fixed x position
+      const x = Math.floor(size * 0.6);
 
       // draw glyph path
       let path = null;
@@ -603,13 +605,17 @@ self.onmessage = async (e) => {
       // Collect diagnostics for debugging (first 40 glyphs)
       if (diagnostics.length < 40) {
         diagnostics.push({ 
-          VERSION: "v8-2025-01-26",  // 版本标记：模块化重构
+          VERSION: "v9-2025-01-27",  // 版本标记：修复 V3 削顶问题
           rendererVersion: (typeof ReadPaperRenderer !== 'undefined' ? ReadPaperRenderer.version : 'unknown'),
           mode: requestedMode,
           whiteThreshold: effectiveWhite,
           blackThreshold: edcBlack,
           cp, 
           char: ch,
+          canvasW: W,
+          canvasH: H,
+          fontAscenderPx: ascenderPx,
+          fontDescenderPx: descenderPx,
           x, 
           y, 
           minX: (minX >= W ? null : minX), 

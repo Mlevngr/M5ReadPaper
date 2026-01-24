@@ -28,7 +28,8 @@
           <div class="field">
             <label for="firmwareSelect">固件选择</label>
             <select id="firmwareSelect">
-              <option value="readpaper" selected>ReadPaper</option>
+              <option value="readpaper" hidden>ReadPaper</option>
+              <option value="readpaper_v3" selected>ReadPaper V3</option>
               <option value="edc">EDC Book</option>
             </select>
           </div>
@@ -79,31 +80,48 @@
 
           <div id="edcThresholdControls" class="field flex-row gap-medium align-center is-hidden">
             <div class="col-6">
-              <label for="edcWhite">白色门限<small class="muted">(<span id="edcWhiteValue">32</span>)</small></label>
+              <label for="edcWhite">白色门限 [16-48]</label>
               <div class="flex-row align-center threshold-control">
                 <input id="edcWhite" type="range" min="16" max="48" value="32" step="1" />
               </div>
+              <div style="text-align:center; margin-top:6px; font-size:0.95em;">
+                <input id="edcWhiteValue" type="number" min="16" max="48" value="32" style=" padding:4px; text-align:center; border:1px solid #ddd; border-radius:3px;" />
+              </div>
             </div>
             <div class="col-6">
-              <label for="edcBlack">黑色门限<small class="muted">(<span id="edcBlackValue">223</span>)</small></label>
+              <label for="edcBlack">黑色门限 [207-239]</label>
               <div class="flex-row align-center threshold-control">
                 <input id="edcBlack" type="range" min="207" max="239" value="223" step="1" />
+              </div>
+              <div style="text-align:center; margin-top:6px; font-size:0.95em;">
+                <input id="edcBlackValue" type="number" min="207" max="239" value="223" style=" padding:4px; text-align:center; border:1px solid #ddd; border-radius:3px;" />
               </div>
             </div>
           </div>
 
-          <!-- V3 三色阈值控制（仅在 Read Paper V3 模式显示） -->
-          <div id="v3ThresholdControls" class="field flex-row gap-medium align-center is-hidden">
-            <div class="col-6">
-              <label for="v3White">V3 白色门限<small class="muted">(<span id="v3WhiteValue">200</span>)</small></label>
-              <div class="flex-row align-center threshold-control">
-                <input id="v3White" type="range" min="160" max="240" value="200" step="1" />
+          <!-- V3 三色阈值控件（左右并列双滑块） -->
+          <div id="v3ThresholdControls" class="field is-hidden">
+            <label>三色阈值 <small class="muted">&lt;灰阈=黑色 | 灰色 | &gt;白阈=白色</small></label>
+            <div style="display:flex; gap:20px; margin-top:8px;">
+              <!-- 左侧：灰色门限 -->
+              <div style="flex:1;">
+                <label style="display:block; margin-bottom:6px; font-size:0.9em; font-weight:500;">灰色阈值 [10-254]</label>
+                <input id="v3RangeLow" class="dual-range-input" type="range" min="10" max="254" value="120" step="1" 
+                       aria-label="灰度阈值" />
+                <div style="text-align:center; margin-top:6px; font-size:0.95em;">
+                  <input id="v3LowValue" type="number" min="10" max="254" value="120" 
+                         style="padding:4px; text-align:center; font-weight:600; border:1px solid #ddd; border-radius:3px;" />
+                </div>
               </div>
-            </div>
-            <div class="col-6">
-              <label for="v3Gray">V3 灰色门限<small class="muted">(<span id="v3GrayValue">120</span>)</small></label>
-              <div class="flex-row align-center threshold-control">
-                <input id="v3Gray" type="range" min="80" max="200" value="120" step="1" />
+              <!-- 右侧：白色门限 -->
+              <div style="flex:1;">
+                <label style="display:block; margin-bottom:6px; font-size:0.9em; font-weight:500;">白色阈值 [10-254]</label>
+                <input id="v3RangeHigh" class="dual-range-input" type="range" min="10" max="254" value="200" step="1" 
+                       aria-label="白色阈值" />
+                <div style="text-align:center; margin-top:6px; font-size:0.95em;">
+                  <input id="v3HighValue" type="number" min="10" max="254" value="200" 
+                         style="padding:4px; text-align:center; font-weight:600; border:1px solid #ddd; border-radius:3px;" />
+                </div>
               </div>
             </div>
           </div>

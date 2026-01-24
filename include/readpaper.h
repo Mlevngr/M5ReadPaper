@@ -135,3 +135,8 @@ int8_t fontLoadLoc = 1;
 //#define GREY_MAP_COLOR 0xA554 // 0xAAAAAA
 //#define GREY_MAP_COLOR 0x94B2 // 0x999999
 #define GREY_MAP_COLOR 0x8430 // 0x888888
+
+// V3 字体多级灰度常量（用于灰度感知缩放）
+#define GREY_LEVEL_LIGHT  0xC618  // 浅灰 ~75% 亮度
+#define GREY_LEVEL_MID    0x8430  // 中灰 ~50% 亮度 (与 GREY_MAP_COLOR 相同)
+#define GREY_LEVEL_DARK   0x4208  // 深灰 ~25% 亮度

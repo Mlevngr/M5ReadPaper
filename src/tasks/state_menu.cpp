@@ -220,7 +220,7 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
         // In show_reading_menu that corresponds to an absolute rect: left=330, top=327, w=164, h=54
         int16_t tx = msg->data.touch.x;
         int16_t ty = msg->data.touch.y;
-        
+
         // 检查是否点击了阅读时间区域 (x: 300-540, y: 140-178)
         if (tx >= 300 && tx < 540 && ty >= 140 && ty < 178)
         {
@@ -231,7 +231,7 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
             currentState_ = STATE_SHOW_TIME_REC;
             return;
         }
-        
+
         const int16_t tag_left = 450;
         const int16_t tag_top = 640 + 40;
         const int16_t tag_w = 90;
@@ -318,11 +318,18 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     if (target_page < 1)
                         target_page = 1; // Don't go below page 1
                     char name_with_page[128];
-                    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
                     // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -345,11 +352,17 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     if (target_page < 1)
                         target_page = 1; // Don't go below page 1
                     char name_with_page[128];
-                    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
-                    // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -372,11 +385,18 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     if (target_page < 1)
                         target_page = 1; // Don't go below page 1
                     char name_with_page[128];
-                    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
                     // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -398,11 +418,17 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     if (target_page >= total_pages)
                         target_page = total_pages; // Don't go above total page
                     char name_with_page[128];
-                    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
                     // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -427,8 +453,16 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
                     // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -449,11 +483,18 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     if (target_page >= total_pages)
                         target_page = total_pages; // Don't go above total page
                     char name_with_page[128];
-                    snprintf(name_with_page, sizeof(name_with_page), "%zu/%zu", target_page, total_pages);
                     // 页码
                     // Clean orginal
-                    g_canvas->fillRect(160, 800, 220, 30, TFT_WHITE);                                          // Clean
-                    bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->fillRect(160, 770, 220, 80, TFT_WHITE); // Clean
+
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", target_page);
+                    // 页码
+                    // bin_font_print(name_with_page, 24, 0, 540, 0, 800, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 775, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    snprintf(name_with_page, sizeof(name_with_page), "%zu", total_pages);
+                    bin_font_print(name_with_page, 28, 0, 540, 0, 815, true, nullptr, TEXT_ALIGN_CENTER, 300); // 0.8f * 30 = 24
+                    g_canvas->drawWideLine(PAPER_S3_WIDTH / 2 - 20, 809, PAPER_S3_WIDTH / 2 + 20, 809, 1.8f, TFT_BLACK);
+
                     bin_font_flush_canvas();
                 }
             }
@@ -510,7 +551,7 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                 if (!g_config.dark)
                 {
                     // 切换 fastrefresh 配置并保存
-                    g_config.fastrefresh= !g_config.fastrefresh;
+                    g_config.fastrefresh = !g_config.fastrefresh;
                     config_save();
                     // 刷新阅读菜单以应用新主题 (参数以现有调用为准)
                     (void)show_reading_menu(g_canvas, false);

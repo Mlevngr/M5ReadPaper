@@ -396,6 +396,126 @@ static void flip_bitmap_horizontal(uint16_t *bitmap, int16_t w, int16_t h)
     }
 }
 
+/**
+ * V3 字体灰度感知缩放渲染
+ * 使用区域采样和加权平均来保持抗锯齿效果
+ *
+ * @param canvas 目标画布
+ * @param bitmap 源位图(RGB565格式，已根据dark_mode映射好颜色)
+ * @param orig_w 原始宽度
+ * @param orig_h 原始高度
+ * @param scaled_w 缩放后宽度
+ * @param scaled_h 缩放后高度
+ * @param canvas_x 画布X坐标
+ * @param canvas_y 画布Y坐标
+ * @param scale_factor 缩放因子
+ * @param dark_mode 暗黑模式
+ */
+static void render_v3_scaled(M5Canvas *canvas, uint16_t *bitmap,
+                             int16_t orig_w, int16_t orig_h,
+                             int16_t scaled_w, int16_t scaled_h,
+                             int16_t canvas_x, int16_t canvas_y,
+                             float scale_factor, bool dark_mode)
+{
+    if (!canvas || !bitmap)
+        return;
+
+    // 注意：bitmap 中的颜色已经根据 dark_mode 映射好了
+    // 正常模式: fg=0x0000(黑), gray=GREY_MAP_COLOR, bg=0xFFFF(白)
+    // Dark模式: fg=0xFFFF(白), gray=GREY_LEVEL_DARK, bg=0x0000(黑)
+    uint16_t bg_color = FontColorMapper::get_background_color(dark_mode);
+    uint16_t fg_color = dark_mode ? 0xFFFF : 0x0000;
+    uint16_t gray_out = dark_mode ? GREY_LEVEL_MID : GREY_MAP_COLOR;
+
+    // 遍历缩放后的每个像素
+    for (int16_t sy = 0; sy < scaled_h; sy++)
+    {
+        for (int16_t sx = 0; sx < scaled_w; sx++)
+        {
+            // 计算原图对应区域的浮点坐标范围
+            float orig_x_start = sx / scale_factor;
+            float orig_y_start = sy / scale_factor;
+            float orig_x_end = (sx + 1) / scale_factor;
+            float orig_y_end = (sy + 1) / scale_factor;
+
+            // 采样区域的整数边界
+            int16_t ox_min = (int16_t)orig_x_start;
+            int16_t oy_min = (int16_t)orig_y_start;
+            int16_t ox_max = (int16_t)orig_x_end;
+            int16_t oy_max = (int16_t)orig_y_end;
+
+            // 累加权重和"墨水浓度"
+            // 墨水浓度: 1.0=前景色(文字), 0.5=灰色, 0.0=背景色
+            float total_weight = 0.0f;
+            float ink_sum = 0.0f;
+            bool has_content = false;
+
+            // 遍历覆盖区域内的所有原图像素
+            for (int16_t oy = oy_min; oy <= oy_max && oy < orig_h; oy++)
+            {
+                for (int16_t ox = ox_min; ox <= ox_max && ox < orig_w; ox++)
+                {
+                    // 计算重叠面积作为权重
+                    float x_overlap = fminf(orig_x_end, ox + 1.0f) - fmaxf(orig_x_start, (float)ox);
+                    float y_overlap = fminf(orig_y_end, oy + 1.0f) - fmaxf(orig_y_start, (float)oy);
+                    if (x_overlap <= 0.0f || y_overlap <= 0.0f)
+                        continue;
+
+                    float weight = x_overlap * y_overlap;
+
+                    uint16_t pixel = bitmap[oy * orig_w + ox];
+                    if (pixel == bg_color)
+                        continue; // 跳过背景色
+
+                    has_content = true;
+
+                    // 将像素转换为"墨水浓度"
+                    // 前景色 = 1.0, 灰色 = 0.5, 背景色 = 0.0
+                    float ink_val;
+                    if (pixel == fg_color)
+                    {
+                        ink_val = 1.0f; // 前景色（文字）
+                    }
+                    else
+                    {
+                        ink_val = 0.5f; // 灰色（抗锯齿）
+                    }
+
+                    ink_sum += ink_val * weight;
+                    total_weight += weight;
+                }
+            }
+
+            // 如果该区域有内容，根据加权平均墨水浓度决定输出颜色
+            if (has_content && total_weight > 0.0f)
+            {
+                float avg_ink = ink_sum / total_weight;
+
+                uint16_t output_color;
+
+                // 根据墨水浓度映射到三阶颜色
+                if (avg_ink > 0.75f)
+                {
+                    // 浓度高 → 前景色
+                    output_color = fg_color;
+                }
+                else if (avg_ink > 0.25f)
+                {
+                    // 中等浓度 → 灰色
+                    output_color = gray_out;
+                }
+                else
+                {
+                    // 浓度低 → 跳过（视为背景）
+                    continue;
+                }
+
+                canvas->drawPixel(canvas_x + sx, canvas_y + sy, output_color);
+            }
+        }
+    }
+}
+
 // Helper: ensure a fixed-size UTF-8 buffer does not end with a truncated multi-byte sequence
 static void utf8_trim_tail(char *buf, size_t bufsize)
 {
@@ -580,41 +700,48 @@ GlyphInfo get_glyph_info(uint32_t unicode)
 }
 
 // 任务局部字形缓存：使用简单的数组+线性查找替代map（避免STL兼容性问题）
-struct TaskGlyphEntry {
+struct TaskGlyphEntry
+{
     TaskHandle_t task;
     BinFontChar glyph;
 };
 static std::vector<TaskGlyphEntry> g_task_temp_glyphs;
 static SemaphoreHandle_t g_temp_glyph_mutex = nullptr;
 
-static void ensure_temp_glyph_mutex() {
-    if (!g_temp_glyph_mutex) {
+static void ensure_temp_glyph_mutex()
+{
+    if (!g_temp_glyph_mutex)
+    {
         g_temp_glyph_mutex = xSemaphoreCreateMutex();
     }
 }
 
-static BinFontChar* get_task_glyph_storage() {
+static BinFontChar *get_task_glyph_storage()
+{
     ensure_temp_glyph_mutex();
     TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
-    
-    if (xSemaphoreTake(g_temp_glyph_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+
+    if (xSemaphoreTake(g_temp_glyph_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+    {
         return nullptr;
     }
-    
+
     // 查找当前任务的存储
-    for (auto& entry : g_task_temp_glyphs) {
-        if (entry.task == current_task) {
+    for (auto &entry : g_task_temp_glyphs)
+    {
+        if (entry.task == current_task)
+        {
             xSemaphoreGive(g_temp_glyph_mutex);
             return &entry.glyph;
         }
     }
-    
+
     // 为新任务创建存储
     TaskGlyphEntry new_entry;
     new_entry.task = current_task;
     g_task_temp_glyphs.push_back(new_entry);
-    BinFontChar* result = &g_task_temp_glyphs.back().glyph;
-    
+    BinFontChar *result = &g_task_temp_glyphs.back().glyph;
+
     xSemaphoreGive(g_temp_glyph_mutex);
     return result;
 }
@@ -639,11 +766,12 @@ const BinFontChar *find_char(uint32_t unicode)
         if (it != g_bin_font.index.end() && it->unicode == unicode16)
         {
             // 获取当前任务的临时 glyph 存储
-            BinFontChar* task_glyph = get_task_glyph_storage();
-            if (!task_glyph) {
+            BinFontChar *task_glyph = get_task_glyph_storage();
+            if (!task_glyph)
+            {
                 return nullptr; // 互斥锁超时或分配失败
             }
-            
+
             // 将索引数据复制到任务局部 BinFontChar
             task_glyph->unicode = it->unicode;
             task_glyph->width = it->width;
@@ -888,12 +1016,28 @@ bool load_bin_font_from_progmem()
     strncpy(g_bin_font.family_name, family_name, sizeof(g_bin_font.family_name) - 1);
     strncpy(g_bin_font.style_name, style_name, sizeof(g_bin_font.style_name) - 1);
 
-    // ⚠️ 关键修复：设置字体格式为 1bit
-    // PROGMEM 字体都是 1bit 格式（版本2）
-    g_bin_font.format = FONT_FORMAT_1BIT;
+    // 根据 version 字段设置字体格式
+    if (version == 2)
+    {
+        g_bin_font.format = FONT_FORMAT_1BIT;
 #if DBG_BIN_FONT_PRINT
-    Serial.printf("[FONT_PROGMEM] 字体格式设置为: FONT_FORMAT_1BIT (%d)\n", FONT_FORMAT_1BIT);
+        Serial.printf("[FONT_PROGMEM] 字体格式: V2 (FONT_FORMAT_1BIT)\n");
 #endif
+    }
+    else if (version == 3)
+    {
+        g_bin_font.format = FONT_FORMAT_HUFFMAN;
+#if DBG_BIN_FONT_PRINT
+        Serial.printf("[FONT_PROGMEM] 字体格式: V3 (FONT_FORMAT_HUFFMAN)\n");
+#endif
+    }
+    else
+    {
+#if DBG_BIN_FONT_PRINT
+        Serial.printf("[FONT_PROGMEM] ⚠️ 未知版本 %u，默认使用 1bit\n", version);
+#endif
+        g_bin_font.format = FONT_FORMAT_1BIT;
+    }
 
     // 清空现有数据
     g_bin_font.chars.clear();
@@ -1907,10 +2051,12 @@ void unload_bin_font()
     clearBookNameCache();
     clearTocCache();
     clearCommonRecyclePool();
-    
+
     // 清理任务局部临时 glyph 缓存
-    if (g_temp_glyph_mutex) {
-        if (xSemaphoreTake(g_temp_glyph_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    if (g_temp_glyph_mutex)
+    {
+        if (xSemaphoreTake(g_temp_glyph_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+        {
             g_task_temp_glyphs.clear();
             xSemaphoreGive(g_temp_glyph_mutex);
         }
@@ -2105,6 +2251,10 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
 {
     // 确定要使用的canvas
     M5Canvas *target_canvas = canvas ? canvas : g_canvas;
+
+    // Workaround for current 3-step grey display: Only for V3!
+    if (color != TFT_BLACK && g_bin_font.version == 3)
+        dark = true;
 
     // 计算缩放比例：如果font_size为0，使用原始大小；否则根据字体文件的基础大小计算比例
     float scale_factor = 1.0f;
@@ -2413,11 +2563,11 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                 y += (int16_t)(g_bin_font.font_size * scale_factor / 2) + char_spacing;
                 continue;
             }
-            
+
             // ⚠️ 关键：立即复制 glyph 数据到栈，避免后续 find_char 调用覆盖任务局部存储
             BinFontChar glyph_copy = *glyph_ptr;
             const BinFontChar *glyph = &glyph_copy;
-            
+
             char_count++; // 记录实际渲染的字符
 
             // 不要在渲染阶段再次判断换列！
@@ -2425,7 +2575,7 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
 
             // 渲染字符（简化版本，类似于水平模式的逻辑）
             // 使用任务局部内存池（避免并发访问冲突）
-            MemoryPool* task_pool = MemoryPool::get_task_pool();
+            MemoryPool *task_pool = MemoryPool::get_task_pool();
             uint8_t *raw_data = task_pool->get_raw_buffer(glyph->bitmap_size);
             uint16_t *char_bitmap = nullptr;
             bool bitmap_loaded = false;
@@ -2516,10 +2666,12 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
 
             // ⚠️ 关键修复：立即复制位图到独立缓冲区，避免在渲染期间池被复用导致数据损坏
             uint16_t *local_bitmap = nullptr;
-            if (char_bitmap) {
+            if (char_bitmap)
+            {
                 size_t bitmap_pixels = (size_t)glyph->bitmapW * (size_t)glyph->bitmapH;
                 local_bitmap = new uint16_t[bitmap_pixels];
-                if (local_bitmap) {
+                if (local_bitmap)
+                {
                     memcpy(local_bitmap, char_bitmap, bitmap_pixels * sizeof(uint16_t));
                 }
                 // 立即释放池缓冲，允许其他操作复用
@@ -2631,30 +2783,28 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                     else
                     {
                         // 缩放版本：需要处理颜色和缩放
-                        // 使用像素级绘制来处理颜色和缩放
-                        for (int16_t sy = 0; sy < scaled_height; sy++)
+                        if (g_bin_font.version == 3)
                         {
-                            for (int16_t sx = 0; sx < scaled_width; sx++)
+                            // V3字体：使用灰度感知缩放算法保持抗锯齿效果
+                            render_v3_scaled(target_canvas, char_bitmap,
+                                             render_width, render_height,
+                                             scaled_width, scaled_height,
+                                             canvas_x, canvas_y,
+                                             scale_factor, dark);
+                        }
+                        else
+                        {
+                            // V2字体：使用像素级绘制来处理颜色和缩放
+                            for (int16_t sy = 0; sy < scaled_height; sy++)
                             {
-                                int16_t orig_x = (int16_t)(sx / scale_factor);
-                                int16_t orig_y = (int16_t)(sy / scale_factor);
-
-                                if (orig_x < render_width && orig_y < render_height)
+                                for (int16_t sx = 0; sx < scaled_width; sx++)
                                 {
-                                    uint16_t pixel = char_bitmap[orig_y * render_width + orig_x];
+                                    int16_t orig_x = (int16_t)(sx / scale_factor);
+                                    int16_t orig_y = (int16_t)(sy / scale_factor);
 
-                                    if (g_bin_font.version == 3)
+                                    if (orig_x < render_width && orig_y < render_height)
                                     {
-                                        // V3字体：直接使用解码后的颜色（包括灰度）
-                                        uint16_t bg_color = FontColorMapper::get_background_color(dark);
-                                        if (pixel != bg_color)
-                                        {
-                                            target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, pixel);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // V2字体：转换为text_color
+                                        uint16_t pixel = char_bitmap[orig_y * render_width + orig_x];
                                         if (pixel != 0xFFFF)
                                         {
                                             target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
@@ -2700,29 +2850,28 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                     else
                     {
                         // 有缩放：使用缩放后的尺寸
-                        for (int16_t sy = 0; sy < scaled_height; sy++)
+                        if (g_bin_font.version == 3)
                         {
-                            for (int16_t sx = 0; sx < scaled_width; sx++)
+                            // V3字体：使用灰度感知缩放
+                            render_v3_scaled(target_canvas, char_bitmap,
+                                             render_width, render_height,
+                                             scaled_width, scaled_height,
+                                             canvas_x, canvas_y,
+                                             scale_factor, dark);
+                        }
+                        else
+                        {
+                            // V2字体：像素级绘制
+                            for (int16_t sy = 0; sy < scaled_height; sy++)
                             {
-                                int16_t orig_x = (int16_t)(sx / scale_factor);
-                                int16_t orig_y = (int16_t)(sy / scale_factor);
-
-                                if (orig_x < render_width && orig_y < render_height)
+                                for (int16_t sx = 0; sx < scaled_width; sx++)
                                 {
-                                    uint16_t pixel = char_bitmap[orig_y * render_width + orig_x];
+                                    int16_t orig_x = (int16_t)(sx / scale_factor);
+                                    int16_t orig_y = (int16_t)(sy / scale_factor);
 
-                                    if (g_bin_font.version == 3)
+                                    if (orig_x < render_width && orig_y < render_height)
                                     {
-                                        // V3字体：直接使用解码后的颜色
-                                        uint16_t bg_color = FontColorMapper::get_background_color(dark);
-                                        if (pixel != bg_color)
-                                        {
-                                            target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, pixel);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // V2字体
+                                        uint16_t pixel = char_bitmap[orig_y * render_width + orig_x];
                                         if (pixel != 0xFFFF)
                                         {
                                             target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
@@ -2866,15 +3015,15 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                 x += (int16_t)(g_bin_font.font_size * scale_factor / 2);
                 continue;
             }
-            
+
             // ⚠️ 关键：立即复制 glyph 数据到栈，避免后续 find_char 调用覆盖任务局部存储
             BinFontChar glyph_copy = *glyph_ptr;
             const BinFontChar *glyph = &glyph_copy;
-            
+
             char_count++; // 记录实际渲染的字符
 
             // 使用任务局部内存池（避免并发访问冲突）
-            MemoryPool* task_pool = MemoryPool::get_task_pool();
+            MemoryPool *task_pool = MemoryPool::get_task_pool();
             uint8_t *raw_data = task_pool->get_raw_buffer(glyph->bitmap_size);
             uint16_t *char_bitmap = nullptr;
             bool bitmap_loaded = false;
@@ -2946,10 +3095,12 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
 
             // ⚠️ 关键修复：立即复制位图到独立缓冲区，避免在渲染期间池被复用导致数据损坏
             uint16_t *local_bitmap = nullptr;
-            if (char_bitmap) {
+            if (char_bitmap)
+            {
                 size_t bitmap_pixels = (size_t)glyph->bitmapW * (size_t)glyph->bitmapH;
                 local_bitmap = new uint16_t[bitmap_pixels];
-                if (local_bitmap) {
+                if (local_bitmap)
+                {
                     memcpy(local_bitmap, char_bitmap, bitmap_pixels * sizeof(uint16_t));
                 }
                 // 立即释放池缓冲，允许其他操作复用
@@ -3209,445 +3360,185 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                     // 黑白二值化渲染：使用准确的灰度计算和门限判断
                     if (scale_factor == 1.0f)
                     {
-                        // 无缩放，黑白二值化处理
+                        // 无缩放
                         for (int16_t py = 0; py < glyph->bitmapH; py++)
                         {
                             for (int16_t px = 0; px < glyph->bitmapW; px++)
                             {
                                 uint16_t pixel = char_bitmap[py * glyph->bitmapW + px];
-                                if (pixel != 0xFFFF)
+
+                                if (g_bin_font.version == 3)
                                 {
-                                    // target_canvas->drawPixel(canvas_x + px, canvas_y + py, 0x0000); // 纯黑
-                                    target_canvas->drawPixel(canvas_x + px, canvas_y + py, text_color); // 纯黑
+                                    // V3字体：直接使用解码后的颜色（包括灰度）
+                                    uint16_t bg_color = FontColorMapper::get_background_color(dark);
+                                    if (pixel != bg_color)
+                                    {
+                                        target_canvas->drawPixel(canvas_x + px, canvas_y + py, pixel);
+                                    }
+                                }
+                                else
+                                {
+                                    // V2字体：二值化处理
+                                    if (pixel != 0xFFFF)
+                                    {
+                                        target_canvas->drawPixel(canvas_x + px, canvas_y + py, text_color);
+                                    }
                                 }
                             }
                         }
                     }
                     else
                     {
-#if SCALING_ALGORITHM == 0
-                        // 原始最近邻算法（快速但质量一般）
-                        for (int16_t sy = 0; sy < scaled_height; sy++)
+                        // 有缩放：对V3字体使用灰度感知算法
+                        if (g_bin_font.version == 3)
                         {
-                            for (int16_t sx = 0; sx < scaled_width; sx++)
-                            {
-                                float orig_x_f = (sx + 0.5f) / scale_factor - 0.5f;
-                                float orig_y_f = (sy + 0.5f) / scale_factor - 0.5f;
-                                int16_t orig_x = (int16_t)orig_x_f;
-                                int16_t orig_y = (int16_t)orig_y_f;
-                                if (orig_x < 0 || orig_y < 0 || orig_x >= glyph->bitmapW || orig_y >= glyph->bitmapH)
-                                    continue;
-                                uint16_t pixel = char_bitmap[orig_y * glyph->bitmapW + orig_x];
-                                if (pixel != 0xFFFF)
-                                {
-                                    target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
-                                }
-                            }
+                            // V3字体：使用灰度感知缩放保持抗锯齿效果
+                            render_v3_scaled(target_canvas, char_bitmap,
+                                             glyph->bitmapW, glyph->bitmapH,
+                                             scaled_width, scaled_height,
+                                             canvas_x, canvas_y,
+                                             scale_factor, dark);
                         }
-
-#elif SCALING_ALGORITHM == 1
-                        // 超采样算法（质量高但较慢）
-                        for (int16_t sy = 0; sy < scaled_height; sy++)
+                        else
                         {
-                            for (int16_t sx = 0; sx < scaled_width; sx++)
+                            // V2字体：使用二值图像算法
+#if SCALING_ALGORITHM == 0
+                            // 原始最近邻算法（快速但质量一般）
+                            for (int16_t sy = 0; sy < scaled_height; sy++)
                             {
-                                // 计算在原图中对应的区域
-                                float orig_x_start = sx / scale_factor;
-                                float orig_y_start = sy / scale_factor;
-                                float orig_x_end = (sx + 1) / scale_factor;
-                                float orig_y_end = (sy + 1) / scale_factor;
-
-                                // 边界检查
-                                int16_t x_min = (int16_t)fmaxf(0, floorf(orig_x_start));
-                                int16_t y_min = (int16_t)fmaxf(0, floorf(orig_y_start));
-                                int16_t x_max = (int16_t)fminf(glyph->bitmapW - 1, ceilf(orig_x_end));
-                                int16_t y_max = (int16_t)fminf(glyph->bitmapH - 1, ceilf(orig_y_end));
-
-                                if (x_min > x_max || y_min > y_max)
-                                    continue;
-
-                                // 计算黑色像素的覆盖面积
-                                float total_weight = 0.0f;
-                                float weighted_gray = 0.0f;
-                                bool has_valid_pixel = false;
-                                bool is_edge_region = false; // 边缘检测
-
-                                for (int16_t oy = y_min; oy <= y_max; oy++)
+                                for (int16_t sx = 0; sx < scaled_width; sx++)
                                 {
-                                    for (int16_t ox = x_min; ox <= x_max; ox++)
-                                    {
-                                        // 计算重叠面积作为权重
-                                        float overlap_x_start = fmaxf(orig_x_start, ox);
-                                        float overlap_x_end = fminf(orig_x_end, ox + 1);
-                                        float overlap_y_start = fmaxf(orig_y_start, oy);
-                                        float overlap_y_end = fminf(orig_y_end, oy + 1);
-
-                                        if (overlap_x_end > overlap_x_start && overlap_y_end > overlap_y_start)
-                                        {
-                                            float weight = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
-                                            uint16_t pixel = char_bitmap[oy * glyph->bitmapW + ox];
-
-                                            if (pixel != 0xFFFF) // 有效像素
-                                            {
-                                                has_valid_pixel = true;
-                                                bool is_black = true;
-                                                float gray_normalized = is_black ? 0.0f : 1.0f; // 二值化：黑=0，白=1
-                                                weighted_gray += gray_normalized * weight;
-                                                total_weight += weight;
-
-                                                // 边缘检测：检查当前像素的邻域
-                                                if (!is_edge_region)
-                                                {
-                                                    for (int dy = -1; dy <= 1; dy++)
-                                                    {
-                                                        for (int dx = -1; dx <= 1; dx++)
-                                                        {
-                                                            if (dx == 0 && dy == 0)
-                                                                continue;
-
-                                                            int16_t nx = ox + dx;
-                                                            int16_t ny = oy + dy;
-
-                                                            if (nx >= 0 && nx < glyph->bitmapW && ny >= 0 && ny < glyph->bitmapH)
-                                                            {
-                                                                uint16_t neighbor = char_bitmap[ny * glyph->bitmapW + nx];
-                                                                bool neighbor_black = (neighbor != 0xFFFF);
-
-                                                                if (is_black != neighbor_black)
-                                                                {
-                                                                    is_edge_region = true;
-                                                                    break;
-                                                                }
-                                                            }
-                                                        }
-                                                        if (is_edge_region)
-                                                            break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 基于加权平均决定是否绘制（改为使用和缩小相同的覆盖率逻辑）
-                                if (has_valid_pixel && total_weight > 0.0f)
-                                {
-                                    float avg_gray = weighted_gray / total_weight;
-                                    // 转换为覆盖率：avg_gray越小（越黑），覆盖率越高
-                                    float coverage_ratio = 1.0f - avg_gray;
-
-                                    // 调整阈值策略：与 scale_factor 成正比，缩小时降低阈值以保留细节
-                                    float base_threshold = 0.25f * fmaxf(0.5f, scale_factor);
-                                    // 限制阈值范围由顶层宏控制
-                                    base_threshold = fmaxf(PAPERS3_BASE_THRESHOLD_MIN, fminf(PAPERS3_BASE_THRESHOLD_MAX, base_threshold));
-
-                                    float threshold;
-                                    if (is_edge_region)
-                                    {
-                                        // 边缘区域：使用更宽松的阈值，减少毛刺
-                                        threshold = base_threshold * 0.8f;
-
-                                        // 渐变处理：在阈值附近使用平滑过渡
-                                        float gradient_range = 0.1f;
-                                        if (coverage_ratio > threshold - gradient_range &&
-                                            coverage_ratio < threshold + gradient_range)
-                                        {
-                                            float gradient_factor = (coverage_ratio - (threshold - gradient_range)) / (2 * gradient_range);
-                                            gradient_factor = fmaxf(0.0f, fminf(1.0f, gradient_factor));
-                                            threshold = threshold - gradient_range + (gradient_factor * 2 * gradient_range);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // 非边缘区域：使用标准阈值
-                                        threshold = base_threshold;
-                                    }
-
-                                    if (coverage_ratio > threshold)
+                                    float orig_x_f = (sx + 0.5f) / scale_factor - 0.5f;
+                                    float orig_y_f = (sy + 0.5f) / scale_factor - 0.5f;
+                                    int16_t orig_x = (int16_t)orig_x_f;
+                                    int16_t orig_y = (int16_t)orig_y_f;
+                                    if (orig_x < 0 || orig_y < 0 || orig_x >= glyph->bitmapW || orig_y >= glyph->bitmapH)
+                                        continue;
+                                    uint16_t pixel = char_bitmap[orig_y * glyph->bitmapW + orig_x];
+                                    if (pixel != 0xFFFF)
                                     {
                                         target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
                                     }
                                 }
                             }
-                        }
 
-#elif SCALING_ALGORITHM == 2
-                        // 双线性插值算法（平衡质量和速度）
-                        for (int16_t sy = 0; sy < scaled_height; sy++)
-                        {
-                            for (int16_t sx = 0; sx < scaled_width; sx++)
-                            {
-                                // 计算原图坐标（中心对齐）
-                                float orig_x_f = (sx + 0.5f) / scale_factor - 0.5f;
-                                float orig_y_f = (sy + 0.5f) / scale_factor - 0.5f;
-
-                                // 获取四个相邻像素的坐标
-                                int16_t x0 = (int16_t)floorf(orig_x_f);
-                                int16_t y0 = (int16_t)floorf(orig_y_f);
-                                int16_t x1 = x0 + 1;
-                                int16_t y1 = y0 + 1;
-
-                                // 边界检查
-                                if (x0 < 0 || y0 < 0 || x1 >= glyph->bitmapW || y1 >= glyph->bitmapH)
-                                {
-                                    // 边界处使用最近邻
-                                    int16_t nx = (int16_t)(orig_x_f + 0.5f);
-                                    int16_t ny = (int16_t)(orig_y_f + 0.5f);
-                                    if (nx >= 0 && ny >= 0 && nx < glyph->bitmapW && ny < glyph->bitmapH)
-                                    {
-                                        uint16_t pixel = char_bitmap[ny * glyph->bitmapW + nx];
-                                        if (pixel != 0xFFFF)
-                                        {
-                                            target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
-                                        }
-                                    }
-                                    continue;
-                                }
-
-                                // 获取四个像素的灰度值
-                                uint16_t p00 = char_bitmap[y0 * glyph->bitmapW + x0];
-                                uint16_t p01 = char_bitmap[y0 * glyph->bitmapW + x1];
-                                uint16_t p10 = char_bitmap[y1 * glyph->bitmapW + x0];
-                                uint16_t p11 = char_bitmap[y1 * glyph->bitmapW + x1];
-
-                                // 检查是否有有效像素
-                                bool valid = (p00 != 0xFFFF) || (p01 != 0xFFFF) || (p10 != 0xFFFF) || (p11 != 0xFFFF);
-                                if (!valid)
-                                    continue;
-
-                                // 将无效像素设为白色（15）
-                                uint8_t g00 = (p00 == 0xFFFF) ? 15 : (uint8_t)(p00 & 0x0F);
-                                uint8_t g01 = (p01 == 0xFFFF) ? 15 : (uint8_t)(p01 & 0x0F);
-                                uint8_t g10 = (p10 == 0xFFFF) ? 15 : (uint8_t)(p10 & 0x0F);
-                                uint8_t g11 = (p11 == 0xFFFF) ? 15 : (uint8_t)(p11 & 0x0F);
-
-                                // 双线性插值权重
-                                float wx = orig_x_f - x0;
-                                float wy = orig_y_f - y0;
-
-                                // 插值计算
-                                float gray_interp = (1 - wx) * (1 - wy) * g00 + wx * (1 - wy) * g01 + (1 - wx) * wy * g10 + wx * wy * g11;
-
-                                // 转换为0-1范围并应用阈值
-                                float gray_normalized = gray_interp / 15.0f;
-                                if (gray_normalized < 0.5f) // 阈值可以调整
-                                {
-                                    target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
-                                }
-                            }
-                        }
-
-#elif SCALING_ALGORITHM == 3
-                        // 二值图像专用算法（最适合黑白字体）
-                        if (scale_factor >= 1.0f)
-                        {
-                            // 放大：使用区域覆盖率判断
+#elif SCALING_ALGORITHM == 1
+                            // 超采样算法（质量高但较慢）
                             for (int16_t sy = 0; sy < scaled_height; sy++)
                             {
                                 for (int16_t sx = 0; sx < scaled_width; sx++)
                                 {
-                                    // 计算目标像素对应的原图区域
+                                    // 计算在原图中对应的区域
                                     float orig_x_start = sx / scale_factor;
                                     float orig_y_start = sy / scale_factor;
                                     float orig_x_end = (sx + 1) / scale_factor;
                                     float orig_y_end = (sy + 1) / scale_factor;
 
-                                    // 扩展到整数边界以包含所有相关像素
-                                    int16_t x_min = (int16_t)floorf(orig_x_start);
-                                    int16_t y_min = (int16_t)floorf(orig_y_start);
-                                    int16_t x_max = (int16_t)ceilf(orig_x_end - 0.001f); // 减小epsilon避免边界问题
-                                    int16_t y_max = (int16_t)ceilf(orig_y_end - 0.001f);
-
                                     // 边界检查
-                                    x_min = (x_min < 0) ? 0 : x_min;
-                                    y_min = (y_min < 0) ? 0 : y_min;
-                                    x_max = (x_max >= glyph->bitmapW) ? glyph->bitmapW - 1 : x_max;
-                                    y_max = (y_max >= glyph->bitmapH) ? glyph->bitmapH - 1 : y_max;
+                                    int16_t x_min = (int16_t)fmaxf(0, floorf(orig_x_start));
+                                    int16_t y_min = (int16_t)fmaxf(0, floorf(orig_y_start));
+                                    int16_t x_max = (int16_t)fminf(glyph->bitmapW - 1, ceilf(orig_x_end));
+                                    int16_t y_max = (int16_t)fminf(glyph->bitmapH - 1, ceilf(orig_y_end));
 
                                     if (x_min > x_max || y_min > y_max)
                                         continue;
 
                                     // 计算黑色像素的覆盖面积
-                                    float black_coverage = 0.0f;
-                                    float total_coverage = 0.0f;
+                                    float total_weight = 0.0f;
+                                    float weighted_gray = 0.0f;
+                                    bool has_valid_pixel = false;
+                                    bool is_edge_region = false; // 边缘检测
 
                                     for (int16_t oy = y_min; oy <= y_max; oy++)
                                     {
                                         for (int16_t ox = x_min; ox <= x_max; ox++)
                                         {
-                                            // 计算像素与目标区域的重叠面积
-                                            float pixel_x_start = ox;
-                                            float pixel_x_end = ox + 1;
-                                            float pixel_y_start = oy;
-                                            float pixel_y_end = oy + 1;
-
-                                            float overlap_x_start = fmaxf(orig_x_start, pixel_x_start);
-                                            float overlap_x_end = fminf(orig_x_end, pixel_x_end);
-                                            float overlap_y_start = fmaxf(orig_y_start, pixel_y_start);
-                                            float overlap_y_end = fminf(orig_y_end, pixel_y_end);
+                                            // 计算重叠面积作为权重
+                                            float overlap_x_start = fmaxf(orig_x_start, ox);
+                                            float overlap_x_end = fminf(orig_x_end, ox + 1);
+                                            float overlap_y_start = fmaxf(orig_y_start, oy);
+                                            float overlap_y_end = fminf(orig_y_end, oy + 1);
 
                                             if (overlap_x_end > overlap_x_start && overlap_y_end > overlap_y_start)
                                             {
-                                                float overlap_area = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
-                                                total_coverage += overlap_area;
-
+                                                float weight = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
                                                 uint16_t pixel = char_bitmap[oy * glyph->bitmapW + ox];
-                                                if (pixel != 0xFFFF)
+
+                                                if (pixel != 0xFFFF) // 有效像素
                                                 {
-                                                    black_coverage += overlap_area;
-                                                }
-                                            }
-                                        }
-                                    }
+                                                    has_valid_pixel = true;
+                                                    bool is_black = true;
+                                                    float gray_normalized = is_black ? 0.0f : 1.0f; // 二值化：黑=0，白=1
+                                                    weighted_gray += gray_normalized * weight;
+                                                    total_weight += weight;
 
-                                    // 基于覆盖率决定：对于放大，如果黑色覆盖率超过阈值就绘制
-                                    if (total_coverage > 0.0f)
-                                    {
-                                        float coverage_ratio = black_coverage / total_coverage;
-                                        // 动态阈值：放大倍数越大，阈值越低，保持细节
-                                        float threshold = 0.3f / fmaxf(1.0f, scale_factor * 0.5f);
-                                        threshold = fmaxf(0.1f, fminf(0.5f, threshold));
-
-                                        if (coverage_ratio > threshold)
-                                        {
-                                            target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // 缩小：使用覆盖率判断，避免笔画重叠
-                            for (int16_t sy = 0; sy < scaled_height; sy++)
-                            {
-                                for (int16_t sx = 0; sx < scaled_width; sx++)
-                                {
-                                    // 计算目标像素对应的原图区域
-                                    float orig_x_start = sx / scale_factor;
-                                    float orig_y_start = sy / scale_factor;
-                                    float orig_x_end = (sx + 1) / scale_factor;
-                                    float orig_y_end = (sy + 1) / scale_factor;
-
-                                    // 获取需要检查的原图像素范围
-                                    int16_t x_min = (int16_t)floorf(orig_x_start);
-                                    int16_t y_min = (int16_t)floorf(orig_y_start);
-                                    int16_t x_max = (int16_t)ceilf(orig_x_end - 0.001f);
-                                    int16_t y_max = (int16_t)ceilf(orig_y_end - 0.001f);
-
-                                    // 边界检查
-                                    x_min = (x_min < 0) ? 0 : x_min;
-                                    y_min = (y_min < 0) ? 0 : y_min;
-                                    x_max = (x_max >= glyph->bitmapW) ? glyph->bitmapW - 1 : x_max;
-                                    y_max = (y_max >= glyph->bitmapH) ? glyph->bitmapH - 1 : y_max;
-
-                                    if (x_min > x_max || y_min > y_max)
-                                        continue;
-
-                                    // 计算黑色像素的覆盖面积（精确计算）
-                                    float black_coverage = 0.0f;
-                                    float total_coverage = 0.0f;
-                                    bool is_edge_region = false; // 检测是否为边缘区域
-
-                                    for (int16_t oy = y_min; oy <= y_max; oy++)
-                                    {
-                                        for (int16_t ox = x_min; ox <= x_max; ox++)
-                                        {
-                                            // 计算像素与目标区域的重叠面积
-                                            float pixel_x_start = ox;
-                                            float pixel_x_end = ox + 1;
-                                            float pixel_y_start = oy;
-                                            float pixel_y_end = oy + 1;
-
-                                            float overlap_x_start = fmaxf(orig_x_start, pixel_x_start);
-                                            float overlap_x_end = fminf(orig_x_end, pixel_x_end);
-                                            float overlap_y_start = fmaxf(orig_y_start, pixel_y_start);
-                                            float overlap_y_end = fminf(orig_y_end, pixel_y_end);
-
-                                            if (overlap_x_end > overlap_x_start && overlap_y_end > overlap_y_start)
-                                            {
-                                                float overlap_area = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
-                                                total_coverage += overlap_area;
-
-                                                uint16_t pixel = char_bitmap[oy * glyph->bitmapW + ox];
-                                                bool is_black = (pixel != 0xFFFF);
-
-                                                if (is_black)
-                                                {
-                                                    black_coverage += overlap_area;
-                                                }
-
-                                                // 边缘检测：检查当前像素的邻域
-                                                if (!is_edge_region)
-                                                {
-                                                    // 检查8邻域中是否有黑白对比
-                                                    for (int dy = -1; dy <= 1; dy++)
+                                                    // 边缘检测：检查当前像素的邻域
+                                                    if (!is_edge_region)
                                                     {
-                                                        for (int dx = -1; dx <= 1; dx++)
+                                                        for (int dy = -1; dy <= 1; dy++)
                                                         {
-                                                            if (dx == 0 && dy == 0)
-                                                                continue;
-
-                                                            int16_t nx = ox + dx;
-                                                            int16_t ny = oy + dy;
-
-                                                            if (nx >= 0 && nx < glyph->bitmapW && ny >= 0 && ny < glyph->bitmapH)
+                                                            for (int dx = -1; dx <= 1; dx++)
                                                             {
-                                                                uint16_t neighbor = char_bitmap[ny * glyph->bitmapW + nx];
-                                                                bool neighbor_black = (neighbor != 0xFFFF);
+                                                                if (dx == 0 && dy == 0)
+                                                                    continue;
 
-                                                                // 如果当前像素和邻居像素颜色不同，则是边缘
-                                                                if (is_black != neighbor_black)
+                                                                int16_t nx = ox + dx;
+                                                                int16_t ny = oy + dy;
+
+                                                                if (nx >= 0 && nx < glyph->bitmapW && ny >= 0 && ny < glyph->bitmapH)
                                                                 {
-                                                                    is_edge_region = true;
-                                                                    break;
+                                                                    uint16_t neighbor = char_bitmap[ny * glyph->bitmapW + nx];
+                                                                    bool neighbor_black = (neighbor != 0xFFFF);
+
+                                                                    if (is_black != neighbor_black)
+                                                                    {
+                                                                        is_edge_region = true;
+                                                                        break;
+                                                                    }
                                                                 }
                                                             }
+                                                            if (is_edge_region)
+                                                                break;
                                                         }
-                                                        if (is_edge_region)
-                                                            break;
                                                     }
                                                 }
                                             }
                                         }
                                     }
 
-                                    // 基于覆盖率决定是否绘制，对边缘区域使用平滑处理
-                                    if (total_coverage > 0.0f)
+                                    // 基于加权平均决定是否绘制（改为使用和缩小相同的覆盖率逻辑）
+                                    if (has_valid_pixel && total_weight > 0.0f)
                                     {
-                                        float coverage_ratio = black_coverage / total_coverage;
+                                        float avg_gray = weighted_gray / total_weight;
+                                        // 转换为覆盖率：avg_gray越小（越黑），覆盖率越高
+                                        float coverage_ratio = 1.0f - avg_gray;
 
                                         // 调整阈值策略：与 scale_factor 成正比，缩小时降低阈值以保留细节
                                         float base_threshold = 0.25f * fmaxf(0.5f, scale_factor);
+                                        // 限制阈值范围由顶层宏控制
                                         base_threshold = fmaxf(PAPERS3_BASE_THRESHOLD_MIN, fminf(PAPERS3_BASE_THRESHOLD_MAX, base_threshold));
 
                                         float threshold;
                                         if (is_edge_region)
                                         {
-                                            // 边缘区域：使用更宽松的阈值和渐变处理，减少毛刺
-                                            threshold = base_threshold * 0.50f; // 进一步降低阈值，让细线条更明显
+                                            // 边缘区域：使用更宽松的阈值，减少毛刺
+                                            threshold = base_threshold * 0.8f;
 
-                                            // 渐变处理：在阈值附近使用概率绘制
-                                            float gradient_range = 0.15f; // 增大渐变范围，让更多细节显示
+                                            // 渐变处理：在阈值附近使用平滑过渡
+                                            float gradient_range = 0.1f;
                                             if (coverage_ratio > threshold - gradient_range &&
                                                 coverage_ratio < threshold + gradient_range)
                                             {
-                                                // 在渐变区域内，根据覆盖率调整绘制概率
                                                 float gradient_factor = (coverage_ratio - (threshold - gradient_range)) / (2 * gradient_range);
                                                 gradient_factor = fmaxf(0.0f, fminf(1.0f, gradient_factor));
-
-                                                // 使用简单的确定性"概率"：基于像素坐标的伪随机
                                                 threshold = threshold - gradient_range + (gradient_factor * 2 * gradient_range);
                                             }
                                         }
                                         else
                                         {
-                                            // 非边缘区域：也降低阈值，让细线条更容易显示
-                                            threshold = base_threshold * 0.85f; // 原来直接使用base_threshold
+                                            // 非边缘区域：使用标准阈值
+                                            threshold = base_threshold;
                                         }
-
-                                        // 限制阈值范围，降低最小阈值来保持细线条
-                                        threshold = fmaxf(0.10f, fminf(0.75f, threshold)); // 进一步降低范围
 
                                         if (coverage_ratio > threshold)
                                         {
@@ -3656,11 +3547,298 @@ void bin_font_print(const std::string &text, uint8_t font_size, uint8_t color, i
                                     }
                                 }
                             }
-                        }
+
+#elif SCALING_ALGORITHM == 2
+                            // 双线性插值算法（平衡质量和速度）
+                            for (int16_t sy = 0; sy < scaled_height; sy++)
+                            {
+                                for (int16_t sx = 0; sx < scaled_width; sx++)
+                                {
+                                    // 计算原图坐标（中心对齐）
+                                    float orig_x_f = (sx + 0.5f) / scale_factor - 0.5f;
+                                    float orig_y_f = (sy + 0.5f) / scale_factor - 0.5f;
+
+                                    // 获取四个相邻像素的坐标
+                                    int16_t x0 = (int16_t)floorf(orig_x_f);
+                                    int16_t y0 = (int16_t)floorf(orig_y_f);
+                                    int16_t x1 = x0 + 1;
+                                    int16_t y1 = y0 + 1;
+
+                                    // 边界检查
+                                    if (x0 < 0 || y0 < 0 || x1 >= glyph->bitmapW || y1 >= glyph->bitmapH)
+                                    {
+                                        // 边界处使用最近邻
+                                        int16_t nx = (int16_t)(orig_x_f + 0.5f);
+                                        int16_t ny = (int16_t)(orig_y_f + 0.5f);
+                                        if (nx >= 0 && ny >= 0 && nx < glyph->bitmapW && ny < glyph->bitmapH)
+                                        {
+                                            uint16_t pixel = char_bitmap[ny * glyph->bitmapW + nx];
+                                            if (pixel != 0xFFFF)
+                                            {
+                                                target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
+                                            }
+                                        }
+                                        continue;
+                                    }
+
+                                    // 获取四个像素的灰度值
+                                    uint16_t p00 = char_bitmap[y0 * glyph->bitmapW + x0];
+                                    uint16_t p01 = char_bitmap[y0 * glyph->bitmapW + x1];
+                                    uint16_t p10 = char_bitmap[y1 * glyph->bitmapW + x0];
+                                    uint16_t p11 = char_bitmap[y1 * glyph->bitmapW + x1];
+
+                                    // 检查是否有有效像素
+                                    bool valid = (p00 != 0xFFFF) || (p01 != 0xFFFF) || (p10 != 0xFFFF) || (p11 != 0xFFFF);
+                                    if (!valid)
+                                        continue;
+
+                                    // 将无效像素设为白色（15）
+                                    uint8_t g00 = (p00 == 0xFFFF) ? 15 : (uint8_t)(p00 & 0x0F);
+                                    uint8_t g01 = (p01 == 0xFFFF) ? 15 : (uint8_t)(p01 & 0x0F);
+                                    uint8_t g10 = (p10 == 0xFFFF) ? 15 : (uint8_t)(p10 & 0x0F);
+                                    uint8_t g11 = (p11 == 0xFFFF) ? 15 : (uint8_t)(p11 & 0x0F);
+
+                                    // 双线性插值权重
+                                    float wx = orig_x_f - x0;
+                                    float wy = orig_y_f - y0;
+
+                                    // 插值计算
+                                    float gray_interp = (1 - wx) * (1 - wy) * g00 + wx * (1 - wy) * g01 + (1 - wx) * wy * g10 + wx * wy * g11;
+
+                                    // 转换为0-1范围并应用阈值
+                                    float gray_normalized = gray_interp / 15.0f;
+                                    if (gray_normalized < 0.5f) // 阈值可以调整
+                                    {
+                                        target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
+                                    }
+                                }
+                            }
+
+#elif SCALING_ALGORITHM == 3
+                            // 二值图像专用算法（最适合黑白字体）
+                            if (scale_factor >= 1.0f)
+                            {
+                                // 放大：使用区域覆盖率判断
+                                for (int16_t sy = 0; sy < scaled_height; sy++)
+                                {
+                                    for (int16_t sx = 0; sx < scaled_width; sx++)
+                                    {
+                                        // 计算目标像素对应的原图区域
+                                        float orig_x_start = sx / scale_factor;
+                                        float orig_y_start = sy / scale_factor;
+                                        float orig_x_end = (sx + 1) / scale_factor;
+                                        float orig_y_end = (sy + 1) / scale_factor;
+
+                                        // 扩展到整数边界以包含所有相关像素
+                                        int16_t x_min = (int16_t)floorf(orig_x_start);
+                                        int16_t y_min = (int16_t)floorf(orig_y_start);
+                                        int16_t x_max = (int16_t)ceilf(orig_x_end - 0.001f); // 减小epsilon避免边界问题
+                                        int16_t y_max = (int16_t)ceilf(orig_y_end - 0.001f);
+
+                                        // 边界检查
+                                        x_min = (x_min < 0) ? 0 : x_min;
+                                        y_min = (y_min < 0) ? 0 : y_min;
+                                        x_max = (x_max >= glyph->bitmapW) ? glyph->bitmapW - 1 : x_max;
+                                        y_max = (y_max >= glyph->bitmapH) ? glyph->bitmapH - 1 : y_max;
+
+                                        if (x_min > x_max || y_min > y_max)
+                                            continue;
+
+                                        // 计算黑色像素的覆盖面积
+                                        float black_coverage = 0.0f;
+                                        float total_coverage = 0.0f;
+
+                                        for (int16_t oy = y_min; oy <= y_max; oy++)
+                                        {
+                                            for (int16_t ox = x_min; ox <= x_max; ox++)
+                                            {
+                                                // 计算像素与目标区域的重叠面积
+                                                float pixel_x_start = ox;
+                                                float pixel_x_end = ox + 1;
+                                                float pixel_y_start = oy;
+                                                float pixel_y_end = oy + 1;
+
+                                                float overlap_x_start = fmaxf(orig_x_start, pixel_x_start);
+                                                float overlap_x_end = fminf(orig_x_end, pixel_x_end);
+                                                float overlap_y_start = fmaxf(orig_y_start, pixel_y_start);
+                                                float overlap_y_end = fminf(orig_y_end, pixel_y_end);
+
+                                                if (overlap_x_end > overlap_x_start && overlap_y_end > overlap_y_start)
+                                                {
+                                                    float overlap_area = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
+                                                    total_coverage += overlap_area;
+
+                                                    uint16_t pixel = char_bitmap[oy * glyph->bitmapW + ox];
+                                                    if (pixel != 0xFFFF)
+                                                    {
+                                                        black_coverage += overlap_area;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // 基于覆盖率决定：对于放大，如果黑色覆盖率超过阈值就绘制
+                                        if (total_coverage > 0.0f)
+                                        {
+                                            float coverage_ratio = black_coverage / total_coverage;
+                                            // 动态阈值：放大倍数越大，阈值越低，保持细节
+                                            float threshold = 0.3f / fmaxf(1.0f, scale_factor * 0.5f);
+                                            threshold = fmaxf(0.1f, fminf(0.5f, threshold));
+
+                                            if (coverage_ratio > threshold)
+                                            {
+                                                target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // 缩小：使用覆盖率判断，避免笔画重叠
+                                for (int16_t sy = 0; sy < scaled_height; sy++)
+                                {
+                                    for (int16_t sx = 0; sx < scaled_width; sx++)
+                                    {
+                                        // 计算目标像素对应的原图区域
+                                        float orig_x_start = sx / scale_factor;
+                                        float orig_y_start = sy / scale_factor;
+                                        float orig_x_end = (sx + 1) / scale_factor;
+                                        float orig_y_end = (sy + 1) / scale_factor;
+
+                                        // 获取需要检查的原图像素范围
+                                        int16_t x_min = (int16_t)floorf(orig_x_start);
+                                        int16_t y_min = (int16_t)floorf(orig_y_start);
+                                        int16_t x_max = (int16_t)ceilf(orig_x_end - 0.001f);
+                                        int16_t y_max = (int16_t)ceilf(orig_y_end - 0.001f);
+
+                                        // 边界检查
+                                        x_min = (x_min < 0) ? 0 : x_min;
+                                        y_min = (y_min < 0) ? 0 : y_min;
+                                        x_max = (x_max >= glyph->bitmapW) ? glyph->bitmapW - 1 : x_max;
+                                        y_max = (y_max >= glyph->bitmapH) ? glyph->bitmapH - 1 : y_max;
+
+                                        if (x_min > x_max || y_min > y_max)
+                                            continue;
+
+                                        // 计算黑色像素的覆盖面积（精确计算）
+                                        float black_coverage = 0.0f;
+                                        float total_coverage = 0.0f;
+                                        bool is_edge_region = false; // 检测是否为边缘区域
+
+                                        for (int16_t oy = y_min; oy <= y_max; oy++)
+                                        {
+                                            for (int16_t ox = x_min; ox <= x_max; ox++)
+                                            {
+                                                // 计算像素与目标区域的重叠面积
+                                                float pixel_x_start = ox;
+                                                float pixel_x_end = ox + 1;
+                                                float pixel_y_start = oy;
+                                                float pixel_y_end = oy + 1;
+
+                                                float overlap_x_start = fmaxf(orig_x_start, pixel_x_start);
+                                                float overlap_x_end = fminf(orig_x_end, pixel_x_end);
+                                                float overlap_y_start = fmaxf(orig_y_start, pixel_y_start);
+                                                float overlap_y_end = fminf(orig_y_end, pixel_y_end);
+
+                                                if (overlap_x_end > overlap_x_start && overlap_y_end > overlap_y_start)
+                                                {
+                                                    float overlap_area = (overlap_x_end - overlap_x_start) * (overlap_y_end - overlap_y_start);
+                                                    total_coverage += overlap_area;
+
+                                                    uint16_t pixel = char_bitmap[oy * glyph->bitmapW + ox];
+                                                    bool is_black = (pixel != 0xFFFF);
+
+                                                    if (is_black)
+                                                    {
+                                                        black_coverage += overlap_area;
+                                                    }
+
+                                                    // 边缘检测：检查当前像素的邻域
+                                                    if (!is_edge_region)
+                                                    {
+                                                        // 检查8邻域中是否有黑白对比
+                                                        for (int dy = -1; dy <= 1; dy++)
+                                                        {
+                                                            for (int dx = -1; dx <= 1; dx++)
+                                                            {
+                                                                if (dx == 0 && dy == 0)
+                                                                    continue;
+
+                                                                int16_t nx = ox + dx;
+                                                                int16_t ny = oy + dy;
+
+                                                                if (nx >= 0 && nx < glyph->bitmapW && ny >= 0 && ny < glyph->bitmapH)
+                                                                {
+                                                                    uint16_t neighbor = char_bitmap[ny * glyph->bitmapW + nx];
+                                                                    bool neighbor_black = (neighbor != 0xFFFF);
+
+                                                                    // 如果当前像素和邻居像素颜色不同，则是边缘
+                                                                    if (is_black != neighbor_black)
+                                                                    {
+                                                                        is_edge_region = true;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                            }
+                                                            if (is_edge_region)
+                                                                break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // 基于覆盖率决定是否绘制，对边缘区域使用平滑处理
+                                        if (total_coverage > 0.0f)
+                                        {
+                                            float coverage_ratio = black_coverage / total_coverage;
+
+                                            // 调整阈值策略：与 scale_factor 成正比，缩小时降低阈值以保留细节
+                                            float base_threshold = 0.25f * fmaxf(0.5f, scale_factor);
+                                            base_threshold = fmaxf(PAPERS3_BASE_THRESHOLD_MIN, fminf(PAPERS3_BASE_THRESHOLD_MAX, base_threshold));
+
+                                            float threshold;
+                                            if (is_edge_region)
+                                            {
+                                                // 边缘区域：使用更宽松的阈值和渐变处理，减少毛刺
+                                                threshold = base_threshold * 0.50f; // 进一步降低阈值，让细线条更明显
+
+                                                // 渐变处理：在阈值附近使用概率绘制
+                                                float gradient_range = 0.15f; // 增大渐变范围，让更多细节显示
+                                                if (coverage_ratio > threshold - gradient_range &&
+                                                    coverage_ratio < threshold + gradient_range)
+                                                {
+                                                    // 在渐变区域内，根据覆盖率调整绘制概率
+                                                    float gradient_factor = (coverage_ratio - (threshold - gradient_range)) / (2 * gradient_range);
+                                                    gradient_factor = fmaxf(0.0f, fminf(1.0f, gradient_factor));
+
+                                                    // 使用简单的确定性"概率"：基于像素坐标的伪随机
+                                                    threshold = threshold - gradient_range + (gradient_factor * 2 * gradient_range);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // 非边缘区域：也降低阈值，让细线条更容易显示
+                                                threshold = base_threshold * 0.85f; // 原来直接使用base_threshold
+                                            }
+
+                                            // 限制阈值范围，降低最小阈值来保持细线条
+                                            threshold = fmaxf(0.10f, fminf(0.75f, threshold)); // 进一步降低范围
+
+                                            if (coverage_ratio > threshold)
+                                            {
+                                                target_canvas->drawPixel(canvas_x + sx, canvas_y + sy, text_color);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 #endif
-                    }
-                }
-            }
+                        } // 结束 V2字体的条件分支
+                    } // 结束缩放分支
+                } // 结束质量模式分支
+            } // 结束 char_bitmap && target_canvas 检查
             // 清理本地位图缓冲
             if (local_bitmap)
             {
