@@ -130,17 +130,20 @@ const EdcRenderer = {
    * @param {Uint8Array} grayscale - 反转灰度图（0=白，255=黑）
    * @param {number} W - Canvas 宽度
    * @param {number} H - Canvas 高度
-   * @param {number} whiteThreshold - 内容检测阈值
+   * @param {number} whiteThreshold - 内容检测阈值（未使用，保留接口兼容）
    * @returns {object|null} {minX, minY, maxX, maxY} 或 null（无内容）
    */
   detectContentBounds(grayscale, W, H, whiteThreshold) {
+    // EDC 使用反转灰度（0=白/背景，255=黑/前景）
+    // 检测任何非零像素作为内容边界，确保抗锯齿边缘不被裁剪
+    const contentDetect = 1; // 任何 > 0 的值都是内容
     let minY = H, maxY = -1, minX = W, maxX = -1;
 
     for (let yy = 0; yy < H; yy++) {
       const rowOffset = yy * W;
       for (let xx = 0; xx < W; xx++) {
         const val = grayscale[rowOffset + xx];
-        if (val >= whiteThreshold) {
+        if (val >= contentDetect) {
           if (yy < minY) minY = yy;
           if (yy > maxY) maxY = yy;
           if (xx < minX) minX = xx;

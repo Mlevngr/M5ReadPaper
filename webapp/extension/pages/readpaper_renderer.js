@@ -277,7 +277,10 @@ const ReadPaperRenderer = {
    * @returns {object|null} {minX, minY, maxX, maxY} 或 null（无内容）
    */
   detectContentBounds(img, W, H, whiteThreshold) {
-    const contentDetect = 255 - whiteThreshold;
+    // 内容检测：任何不是纯白（255）的像素都应该被考虑
+    // 使用一个宽松的阈值来检测边界，确保抗锯齿边缘不被裁剪
+    // 对于白色背景（255），任何灰度值 < 254 都可能是字形的一部分
+    const contentDetect = 254; // 宽松检测，几乎所有非纯白像素
     let minY = H, maxY = -1, minX = W, maxX = -1;
 
     for (let yy = 0; yy < H; yy++) {
