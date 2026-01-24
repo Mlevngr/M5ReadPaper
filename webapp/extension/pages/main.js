@@ -619,12 +619,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (edcWhiteInput) edcWhiteInput.disabled = configLocked;
     if (edcBlackInput) edcBlackInput.disabled = configLocked;
 
-    // 控制 PROGMEM 导出选项的可用性（仅 ReadPaper V2 模式可用）
+    // 控制 PROGMEM 导出选项的可用性（ReadPaper V2 和 V3 模式可用）
     // 注意：显示/隐藏由 showmethemoney() 函数控制
     if (exportProgmemCheckbox) {
-      exportProgmemCheckbox.disabled = configLocked || isEdc || isV3;
-      if (isEdc || isV3) {
-        exportProgmemCheckbox.checked = false; // EDC 和 V3 模式下自动取消选中
+      exportProgmemCheckbox.disabled = configLocked || isEdc;
+      if (isEdc) {
+        exportProgmemCheckbox.checked = false; // EDC 模式下自动取消选中
       }
     }
 
@@ -2442,7 +2442,7 @@ document.addEventListener('DOMContentLoaded', () => {
       appendLog('触发下载...');
       triggerDownload(binBlob, outputPath.value || (fontNames.family + '.bin'));
 
-      // 导出 PROGMEM C++ 文件（仅 ReadPaper 模式且用户勾选了选项）
+      // 导出 PROGMEM C++ 文件（ReadPaper V2/V3 模式且用户勾选了选项）
       if (!isEdc && exportProgmemCheckbox && exportProgmemCheckbox.checked) {
         try {
           appendLog('生成 C++ PROGMEM 文件...');

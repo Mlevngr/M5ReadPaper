@@ -1016,12 +1016,28 @@ bool load_bin_font_from_progmem()
     strncpy(g_bin_font.family_name, family_name, sizeof(g_bin_font.family_name) - 1);
     strncpy(g_bin_font.style_name, style_name, sizeof(g_bin_font.style_name) - 1);
 
-    // ⚠️ 关键修复：设置字体格式为 1bit
-    // PROGMEM 字体都是 1bit 格式（版本2）
-    g_bin_font.format = FONT_FORMAT_1BIT;
+    // 根据 version 字段设置字体格式
+    if (version == 2)
+    {
+        g_bin_font.format = FONT_FORMAT_1BIT;
 #if DBG_BIN_FONT_PRINT
-    Serial.printf("[FONT_PROGMEM] 字体格式设置为: FONT_FORMAT_1BIT (%d)\n", FONT_FORMAT_1BIT);
+        Serial.printf("[FONT_PROGMEM] 字体格式: V2 (FONT_FORMAT_1BIT)\n");
 #endif
+    }
+    else if (version == 3)
+    {
+        g_bin_font.format = FONT_FORMAT_HUFFMAN;
+#if DBG_BIN_FONT_PRINT
+        Serial.printf("[FONT_PROGMEM] 字体格式: V3 (FONT_FORMAT_HUFFMAN)\n");
+#endif
+    }
+    else
+    {
+#if DBG_BIN_FONT_PRINT
+        Serial.printf("[FONT_PROGMEM] ⚠️ 未知版本 %u，默认使用 1bit\n", version);
+#endif
+        g_bin_font.format = FONT_FORMAT_1BIT;
+    }
 
     // 清空现有数据
     g_bin_font.chars.clear();
