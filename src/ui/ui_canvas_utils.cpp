@@ -271,7 +271,7 @@ bool show_reading_menu(M5Canvas *canvas, bool refresh)
 
     // bin_font_print("已读 ", 24, 0, 50, 310, 146, false, nullptr, TEXT_ALIGN_LEFT, 120, true, true, false, true);
     bin_font_print("已读 ", 28, 0, 50, 300, 144, false, nullptr, TEXT_ALIGN_LEFT, 120, false, false, false, true);
-    // 已读时间小时数/分钟数：从当前打开的 BookHandle 获取，若无则显示 0:00
+    // 已读时间小时数/分钟数：从bm文件获取（已与rec文件第一行同步）
     char read_hour_str[16] = "0";
     char read_min_str[8] = "00";
     if (g_current_book)

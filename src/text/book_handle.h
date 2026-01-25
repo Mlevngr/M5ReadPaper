@@ -138,6 +138,7 @@ public:
     // 阅读时间（小时/分钟），用于记录最后阅读时间
     int16_t getReadHour() const { return readhour; }
     int16_t getReadMin() const { return readmin; }
+    void setReadTime(int16_t hours, int16_t mins) { readhour = hours; readmin = mins; }
     size_t getCurrentPageCharCount() const;
 
     // Setter方法
@@ -383,7 +384,7 @@ BookmarkConfig loadBookmarkConfig(const char *config_file = "/spiffs/bookmark.cf
 bool restoreBookFromConfig(BookHandle *&book, const BookmarkConfig &config);
 
 // 新的自动书签系统函数
-bool saveBookmarkForFile(const BookHandle *book);                      // 根据文件名自动保存书签到SD卡
+bool saveBookmarkForFile(BookHandle *book);                      // 根据文件名自动保存书签到SD卡
 BookmarkConfig loadBookmarkForFile(const std::string &book_file_path); // 根据文件名自动加载书签
 bool isFileModified(const std::string &book_file_path);                // 检查文件是否被修改过（基于文件大小）
 bool ensureBookmarksFolder();                                          // 确保SD卡上存在bookmarks文件夹

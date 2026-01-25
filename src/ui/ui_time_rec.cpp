@@ -406,17 +406,15 @@ void draw_time_rec_screen(M5Canvas *canvas)
         int32_t morning_mins = 0;   // 04:00-12:00
         int32_t afternoon_mins = 0; // 12:00-20:00
         int32_t night_mins = 0;     // 20:00-04:00
-        int32_t unknown_mins = 0;   // 无小时信息
+        int32_t unknown_mins = 0;   // 格式错误的记录
 
-        // 从书籍记录中获取总时间（分钟）
-        int32_t total_mins = g_current_book->getReadHour() * 60 + g_current_book->getReadMin();
-
+        // 遍历所有hourly_records，按小时分配到各时段
         for (const auto &entry : hourly_records)
         {
             const std::string &ts = entry.first; // YYYYMMDDHH
             int32_t mins = entry.second;
 
-            if (ts.length() >= 10)
+            if (ts.length() == 10)
             {
                 // 提取小时（最后两位）
                 int hour = atoi(ts.substr(8, 2).c_str());
@@ -434,17 +432,21 @@ void draw_time_rec_screen(M5Canvas *canvas)
                     night_mins += mins;
                 }
             }
+            else
+            {
+                // 时间戳格式不完整（理论上不应该出现），计入未知时段
+                unknown_mins += mins;
+            }
         }
 
-        // unknown_mins为总时间减去已知时段的时间
-        unknown_mins = total_mins - (morning_mins + afternoon_mins + night_mins);
-        if (unknown_mins < 0)
-            unknown_mins = 0;
-
-        // 如果总时间为0，全部算无信息
+        // 饼图基于实际记录的时段总和（而不是bm文件的总时间）
+        // 因为rec和bm来自同一个计时动作，对于新书应该一致
+        // 如果不一致，以rec的详细记录为准
+        int32_t total_mins = morning_mins + afternoon_mins + night_mins + unknown_mins;
+        
         if (total_mins == 0)
         {
-            total_mins = 1;
+            total_mins = 1; // 避免除零
             unknown_mins = 1;
         }
 

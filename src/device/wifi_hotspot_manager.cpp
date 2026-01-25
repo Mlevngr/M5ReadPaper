@@ -854,6 +854,12 @@ static void parseRecFileToJson(const std::string &rec_file_path, const std::stri
     std::map<std::string, int32_t> dailySummary;
     std::map<std::string, int32_t> monthlySummary;
     
+    // Time period distribution (same logic as ui_time_rec.cpp)
+    int32_t morning_mins = 0;   // 04:00-12:00
+    int32_t afternoon_mins = 0; // 12:00-20:00
+    int32_t night_mins = 0;     // 20:00-04:00
+    int32_t unknown_mins = 0;   // Format errors
+    
     while (rf.available()) {
         String line = rf.readStringUntil('\n');
         line.trim();
@@ -896,6 +902,23 @@ static void parseRecFileToJson(const std::string &rec_file_path, const std::stri
                 std::string month = timestamp.substr(0, 6);
                 monthlySummary[month] += mins;
             }
+            
+            // Calculate time period distribution
+            if (timestamp.length() == 10) {
+                // Extract hour (last 2 digits)
+                int hour = atoi(timestamp.substr(8, 2).c_str());
+                
+                if (hour >= 4 && hour < 12) {
+                    morning_mins += mins;
+                } else if (hour >= 12 && hour < 20) {
+                    afternoon_mins += mins;
+                } else { // 20:00-04:00 (20-23, 0-3)
+                    night_mins += mins;
+                }
+            } else {
+                // Format error, count as unknown
+                unknown_mins += mins;
+            }
         }
     }
     rf.close();
@@ -928,6 +951,17 @@ static void parseRecFileToJson(const std::string &rec_file_path, const std::stri
         jsonOutput += "\"" + String(entry.first.c_str()) + "\":" + String(entry.second);
         first = false;
     }
+    jsonOutput += "},";
+    
+    // Add time period distribution (04-12, 12-20, 20-04, unknown)
+    // Based on actual hourly records sum, not bm file total
+    int32_t actual_total_mins = morning_mins + afternoon_mins + night_mins + unknown_mins;
+    jsonOutput += "\"time_distribution\":{";
+    jsonOutput += "\"morning_04_12\":" + String(morning_mins) + ",";
+    jsonOutput += "\"afternoon_12_20\":" + String(afternoon_mins) + ",";
+    jsonOutput += "\"night_20_04\":" + String(night_mins) + ",";
+    jsonOutput += "\"unknown\":" + String(unknown_mins) + ",";
+    jsonOutput += "\"total_from_records\":" + String(actual_total_mins);
     jsonOutput += "}";
     
     jsonOutput += "}";

@@ -1674,7 +1674,7 @@ std::string getRecordFileName(const std::string &book_file_path)
     return std::string("/bookmarks/") + safe_path + ".rec";
 }
 
-bool saveBookmarkForFile(const BookHandle *book)
+bool saveBookmarkForFile(BookHandle *book)
 {
     if (!book)
         return false;
@@ -1756,15 +1756,37 @@ bool saveBookmarkForFile(const BookHandle *book)
             
             // 读取现有的 rec 文件
             std::map<std::string, int32_t> records; // key: timestamp, value: mins
+            int32_t old_rec_total_mins = 0; // rec文件第一行的原有总时间
+            
             SafeFS::restoreFromTmpIfNeeded(rec_fn);
             if (SDW::SD.exists(rec_fn.c_str()))
             {
                 File rf = SDW::SD.open(rec_fn.c_str(), "r");
                 if (rf)
                 {
-                    // 跳过第一行（总时间）
+                    // 读取第一行（总时间）
                     if (rf.available())
-                        rf.readStringUntil('\n');
+                    {
+                        String first_line = rf.readStringUntil('\n');
+                        first_line.trim();
+                        // 解析 xxhxxm 或 xxm
+                        int h_pos = first_line.indexOf('h');
+                        if (h_pos > 0)
+                        {
+                            int hours = first_line.substring(0, h_pos).toInt();
+                            int m_pos = first_line.indexOf('m', h_pos);
+                            int minutes = 0;
+                            if (m_pos > h_pos + 1)
+                                minutes = first_line.substring(h_pos + 1, m_pos).toInt();
+                            old_rec_total_mins = hours * 60 + minutes;
+                        }
+                        else
+                        {
+                            int m_pos = first_line.indexOf('m');
+                            if (m_pos > 0)
+                                old_rec_total_mins = first_line.substring(0, m_pos).toInt();
+                        }
+                    }
                     
                     // 读取后续记录
                     while (rf.available())
@@ -1806,11 +1828,16 @@ bool saveBookmarkForFile(const BookHandle *book)
             // 更新当前小时的记录
             records[timestamp_hour] += delta_mins;
             
-            // 写回 rec 文件
+            // 计算新的总时间：原有总时间 + 本次增量
+            int32_t new_rec_total_mins = old_rec_total_mins + delta_mins;
+            int32_t new_rec_total_hours = new_rec_total_mins / 60;
+            int32_t new_rec_total_mins_remainder = new_rec_total_mins % 60;
+            
+            // 写回 rec 文件（第一行使用：原有总时间 + 本次增量）
             SafeFS::safeWrite(rec_fn, [&](File &f)
             {
-                // 第一行：总时间
-                f.printf("%dh%dm\n", new_hour, new_min);
+                // 第一行：原有总时间 + 本次增量
+                f.printf("%dh%dm\n", new_rec_total_hours, new_rec_total_mins_remainder);
                 
                 // 后续行：按时间戳排序输出
                 for (const auto &entry : records)
@@ -1824,6 +1851,39 @@ bool saveBookmarkForFile(const BookHandle *book)
                     else
                         f.printf("%s:%dm\n", entry.first.c_str(), mins);
                 }
+                return true;
+            });
+            
+            // 同步更新BookHandle对象和bm文件中的总时间（与rec文件第一行保持一致）
+            book->setReadTime(new_rec_total_hours, new_rec_total_mins_remainder);
+            
+            // 重新保存bm文件以同步总时间
+            std::string bm_fn = getBookmarkFileName(book->filePath());
+            SafeFS::safeWrite(bm_fn, [&](File &f)
+            {
+                f.printf("file_path=%s\n", book->filePath().c_str());
+                f.printf("current_position=%zu\n", book->position());
+                f.printf("file_size=%zu\n", book->getFileSize());
+                f.printf("area_width=%d\n", book->getAreaWidth());
+                f.printf("area_height=%d\n", book->getAreaHeight());
+                f.printf("font_size=%.2f\n", book->getFontSize());
+                f.printf("font_name=%s\n", get_current_font_name());
+                f.printf("font_version=%u\n", get_font_version());
+                f.printf("font_base_size=%u\n", get_font_size_from_file());
+                f.printf("encoding=%d\n", (int)book->getEncoding());
+                f.printf("current_page_index=%zu\n", book->getCurrentPageIndex());
+                f.printf("total_pages=%zu\n", book->getTotalPages());
+                f.printf("page_completed=%s\n", book->isPageCompleted() ? "true" : "false");
+                f.printf("showlabel=%s\n", book->getShowLabel() ? "true" : "false");
+                f.printf("keepOrg=%s\n", book->getKeepOrg() ? "true" : "false");
+                f.printf("drawBottom=%s\n", book->getDrawBottom() ? "true" : "false");
+                f.printf("verticalText=%s\n", book->getVerticalText() ? "true" : "false");
+                
+                // 写入与rec文件第一行同步的总时间
+                f.printf("readhour=%d\n", new_rec_total_hours);
+                f.printf("readmin=%d\n", new_rec_total_mins_remainder);
+                
+                f.println("valid=true");
                 return true;
             });
         }
