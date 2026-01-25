@@ -10,35 +10,21 @@
 
 extern M5Canvas *g_canvas;
 extern GlobalConfig g_config;
-bool s_toggleFastMode = false;
 // 队列和任务句柄
 static QueueHandle_t s_displayQueue = NULL;
 static TaskHandle_t s_displayTaskHandle = NULL;
 // Canvas FIFO 用于存放 M5Canvas* 克隆（由渲染端创建，显示任务消费）
 static QueueHandle_t s_canvasQueue = NULL;
 
-// 全局canvas用于存储屏幕底部4像素高度的区域(540*4)
-static M5Canvas *g_bottomStripCanvas = nullptr;
-
 // pushSprite 计数器
 static volatile uint32_t s_pushCount = 0;
-static const uint32_t PUSH_COUNT_THRESHOLD = FIRST_REFRESH_TH;          // 6次epd_fastest
-static const uint32_t PUSH_COUNT_THRESHOLD_QUALIYT = SECOND_REFRESH_TH; // 24次epd_quality
+static const uint32_t PUSH_COUNT_THRESHOLD = FIRST_REFRESH_TH;          // WorkAround My own device's HW issue...
+static const uint32_t PUSH_COUNT_THRESHOLD_QUALIYT = SECOND_REFRESH_TH; // FullFresh for fast Mode
 
 // 任务函数
 static void displayTaskFunction(void *pvParameters)
 {
     M5.Display.powerSaveOff();
-
-    // 初始化底部区域canvas (540*4)
-    if (g_bottomStripCanvas == nullptr)
-    {
-        g_bottomStripCanvas = new M5Canvas(&M5.Display);
-        if (g_bottomStripCanvas)
-        {
-            g_bottomStripCanvas->createSprite(540, 4);
-        }
-    }
 
     uint8_t msg;
     for (;;)
@@ -73,58 +59,33 @@ static void displayTaskFunction(void *pvParameters)
                     // 累加计数器
 
                     // 根据计数器决定是否使用quality模式 & fast mode
-                    bool useTextMode = (s_pushCount % PUSH_COUNT_THRESHOLD == 0) && (s_pushCount >= PUSH_COUNT_THRESHOLD);
-                    bool useQualityMode = (s_pushCount >= PUSH_COUNT_THRESHOLD_QUALIYT || msg == DISPLAY_PUSH_MSG_TYPE_FLUSH_QUALITY);
+                    bool needMiddleStep = g_config.fastrefresh && (s_pushCount % PUSH_COUNT_THRESHOLD == 0) && (s_pushCount >= PUSH_COUNT_THRESHOLD);
+                    // bool needMiddleStep = (s_pushCount % PUSH_COUNT_THRESHOLD == 0) && (s_pushCount >= PUSH_COUNT_THRESHOLD);
+                    bool useQualityMode = (s_pushCount >= PUSH_COUNT_THRESHOLD_QUALIYT && g_config.fastrefresh) || msg == DISPLAY_PUSH_MSG_TYPE_FLUSH_QUALITY || (s_pushCount >= FULL_REFRESH_TH && !g_config.fastrefresh);
                     s_pushCount++;
 
                     if (useQualityMode)
                     {
                         s_pushCount = 0;
-                        // 保存当前模式并切换到quality
-                        // 注意：M5Stack没有直接的getEpdMode()，我们假设默认是fastest
                         M5.Display.setEpdMode(QUALITY_REFRESH);
                         M5.Display.setColorDepth(16);
 #if DBG_BIN_FONT_PRINT
                         Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 使用quality模式\n", (unsigned long)s_pushCount);
 #endif
                     }
-                    else if (useTextMode && !g_config.dark && g_config.fastrefresh)
+                    // else if (needMiddleStep && !g_config.dark && g_config.fastrefresh)
+                    else if (needMiddleStep && !g_config.dark)
                     {
                         // 其实只是为了切一下模式消除中部疑似硬件问题带来的残影。
                         // Toggle between epd_fastest and epd_fast to try to mitigate mid-screen ghosting.
-                        s_toggleFastMode = !s_toggleFastMode; // 暂时不用了
-                        // if (s_toggleFastMode)
-                        if (true)
-                        {
-                            M5.Display.setEpdMode(MIDDLE_REFRESH);
-                            /*
-                            //- Insert one round Push to reset the screen !
-                            if (msg == DISPLAY_PUSH_MSG_TYPE_FLUSH)
-                                use_canvas->pushSprite(0, 0);
-                            else if (msg == DISPLAY_PUSH_MSG_TYPE_FLUSH_TRANS)
-                                use_canvas->pushSprite(0, 0, TFT_WHITE);
-                            else if (msg == DISPLAY_PUSH_MSG_TYPE_FLUSH_INVERT_TRANS)
-                                use_canvas->pushSprite(0, 0, TFT_BLACK);
-                            else
-                                use_canvas->pushSprite(0, 0);
-                            */
-                            // 推送一个白色小方块到屏幕 (0,0) 到 (10,10)
-                            g_bottomStripCanvas->pushSprite(0, 478, TFT_BLACK);
-                            M5.Display.waitDisplay();
-                            // delay(100);
-                            M5.Display.setEpdMode(g_config.fastrefresh ? LOW_REFRESH : NORMAL_REFRESH);
+
+                        M5.Display.setEpdMode(MIDDLE_REFRESH);
+                        M5.Display.fillRect(0, 478, 540, 4, TFT_WHITE);
+                        M5.Display.waitDisplay();
+                        M5.Display.setEpdMode(g_config.fastrefresh ? LOW_REFRESH : NORMAL_REFRESH);
 #if DBG_BIN_FONT_PRINT
-                            Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 切换到 epd_fastest (toggle)\n", (unsigned long)s_pushCount);
+                        Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 切换到 epd_fastest (toggle)\n", (unsigned long)s_pushCount);
 #endif
-                        }
-                        else
-                        {
-                            // M5.Display.setEpdMode( MIDDLE_REFRESH);
-                            M5.Display.setEpdMode(g_config.fastrefresh ? NORMAL_REFRESH : MIDDLE_REFRESH);
-#if DBG_BIN_FONT_PRINT
-                            Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 切换到 epd_fast (toggle)\n", (unsigned long)s_pushCount);
-#endif
-                        }
 #if DBG_BIN_FONT_PRINT
                         Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 使用quality模式\n", (unsigned long)s_pushCount);
 #endif
@@ -153,22 +114,8 @@ static void displayTaskFunction(void *pvParameters)
                     else
                         use_canvas->pushSprite(0, 0);
 
-                    // 保存底部区域 (0,478)->(540,482) 到全局canvas
-                    if (g_bottomStripCanvas && use_canvas)
-                    {
-                        // 从use_canvas的(0,478)位置读取540*4区域并保存到g_bottomStripCanvas
-                        for (int y = 0; y < 4; y++)
-                        {
-                            for (int x = 0; x < 540; x++)
-                            {
-                                uint16_t color = use_canvas->readPixel(x, 478 + y);
-                                g_bottomStripCanvas->drawPixel(x, y, color);
-                            }
-                        }
-                    }
-
                     // 如果使用了quality模式，推送后恢复fastest模式
-                    // if (useQualityMode || useTextMode)
+                    // if (useQualityMode || needMiddleStep)
                     if (useQualityMode)
                     {
                         // delay(300);
@@ -268,12 +215,6 @@ void destroyDisplayPushTask()
         }
         vQueueDelete(s_canvasQueue);
         s_canvasQueue = NULL;
-    }
-    // 清理底部区域canvas
-    if (g_bottomStripCanvas != nullptr)
-    {
-        delete g_bottomStripCanvas;
-        g_bottomStripCanvas = nullptr;
     }
 }
 
