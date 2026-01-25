@@ -253,11 +253,11 @@ static bool writeTagsFile(const std::string &tags_fn, const std::vector<TagEntry
     // 【调试日志】记录tags文件写入结果
     if (result)
     {
-        Serial.printf("[Tags] writeTagsFile: 写入成功 (%zu tags)\n", entries.size());
+        //Serial.printf("[Tags] writeTagsFile: 写入成功 (%zu tags)\n", entries.size());
     }
     else
     {
-        Serial.println("[Tags] writeTagsFile: 写入失败！");
+        //Serial.println("[Tags] writeTagsFile: 写入失败！");
     }
     
     return result;
@@ -573,8 +573,7 @@ bool insertAutoTagForFile(const std::string &book_file_path, size_t position)
     // 如果新位置比现有 auto tag 位置小，不更新（保护最大进度）
     if (have_auto && position < auto_entry.position)
     {
-        Serial.printf("[Tags] insertAutoTagForFile: 保护最大进度，不更新 auto tag (new=%zu < existing=%zu)\n",
-                      position, auto_entry.position);
+//        Serial.printf("[Tags] insertAutoTagForFile: 保护最大进度，不更新 auto tag (new=%zu < existing=%zu)\n",position, auto_entry.position);
         return true; // 返回成功，但不更新
     }
 
@@ -590,8 +589,7 @@ bool insertAutoTagForFile(const std::string &book_file_path, size_t position)
     // replace auto
     have_auto = true; auto_entry = newe;
     
-    Serial.printf("[Tags] insertAutoTagForFile: 更新auto tag, new_pos=%zu (old_pos=%s)\n", 
-                  position, have_auto ? "exists" : "none");
+    //Serial.printf("[Tags] insertAutoTagForFile: 更新auto tag, new_pos=%zu (old_pos=%s)\n",position, have_auto ? "exists" : "none");
 
     std::sort(manual.begin(), manual.end(), [](const TagEntry &a, const TagEntry &b){ return a.position < b.position; });
     if (manual.size() > 0 && manual.size() > (MAX_TAG_LINES > 0 ? (MAX_TAG_LINES - 1) : 0)) manual.resize((MAX_TAG_LINES > 0) ? (MAX_TAG_LINES - 1) : 0);
@@ -602,8 +600,7 @@ bool insertAutoTagForFile(const std::string &book_file_path, size_t position)
     if (combined.size() > MAX_TAG_LINES) combined.resize(MAX_TAG_LINES);
     
     // 【调试日志】记录即将写入的tags信息
-    Serial.printf("[Tags] insertAutoTagForFile: 准备写入 %zu 个tags (auto=%s, manual=%zu, 调用者: insertAutoTagForFile)\n", 
-                  combined.size(), have_auto ? "yes" : "no", manual.size());
+    //Serial.printf("[Tags] insertAutoTagForFile: 准备写入 %zu 个tags (auto=%s, manual=%zu, 调用者: insertAutoTagForFile)\n", combined.size(), have_auto ? "yes" : "no", manual.size());
     
     return writeTagsFile(tags_fn, combined);
 }

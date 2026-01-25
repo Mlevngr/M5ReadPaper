@@ -88,7 +88,7 @@ static void displayTaskFunction(void *pvParameters)
                         Serial.printf("[DISPLAY_PUSH_TASK] pushSprite #%lu - 使用quality模式\n", (unsigned long)s_pushCount);
 #endif
                     }
-                    else if (useTextMode)
+                    else if (useTextMode && !g_config.dark && g_config.fastrefresh)
                     {
                         // 其实只是为了切一下模式消除中部疑似硬件问题带来的残影。
                         // Toggle between epd_fastest and epd_fast to try to mitigate mid-screen ghosting.
@@ -97,7 +97,6 @@ static void displayTaskFunction(void *pvParameters)
                         if (true)
                         {
                             M5.Display.setEpdMode(MIDDLE_REFRESH);
-                            // M5.Display.setEpdMode(g_config.fastrefresh ? NORMAL_REFRESH : MIDDLE_REFRESH);
                             /*
                             //- Insert one round Push to reset the screen !
                             if (msg == DISPLAY_PUSH_MSG_TYPE_FLUSH)
@@ -110,7 +109,6 @@ static void displayTaskFunction(void *pvParameters)
                                 use_canvas->pushSprite(0, 0);
                             */
                             // 推送一个白色小方块到屏幕 (0,0) 到 (10,10)
-                            //                            M5.Display.fillRect(0, 478, 540, 4, TFT_WHITE);
                             g_bottomStripCanvas->pushSprite(0, 478, TFT_BLACK);
                             M5.Display.waitDisplay();
                             // delay(100);
