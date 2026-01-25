@@ -519,12 +519,14 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                         // Background has started rebuild -> jump and render
                         g_current_book->jumpToPage(0);
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                     }
                     else
                     {
                         // Timeout: still jump/render to avoid blocking forever
                         g_current_book->jumpToPage(0);
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                     }
                     currentState_ = STATE_READING;
                 }
@@ -618,11 +620,13 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                     {
                         g_current_book->jumpToPage(0);
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                     }
                     else
                     {
                         g_current_book->jumpToPage(0);
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                     }
                     currentState_ = STATE_READING;
                 }
@@ -657,6 +661,7 @@ void StateMachineTask::handleMenuState(const SystemMessage_t *msg)
                 // 返回阅读
                 g_current_book->jumpToPage(target_page - 1);
                 g_current_book->renderCurrentPage(font_size);
+                g_current_book->saveBookmark(); // render后保存书签
                 currentState_ = STATE_READING;
             }
         }

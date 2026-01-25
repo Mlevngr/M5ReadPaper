@@ -127,6 +127,7 @@ void StateMachineTask::handleIndexDisplayState(const SystemMessage_t *msg)
             {
                 ui_push_image_to_display_direct("/spiffs/wait.png", 240, 450);
                 g_current_book->renderCurrentPage(font_size);
+                g_current_book->saveBookmark(); // render后保存书签
                 currentState_ = STATE_READING;
                 return;
             }

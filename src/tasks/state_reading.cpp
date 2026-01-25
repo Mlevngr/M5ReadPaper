@@ -126,6 +126,7 @@ void StateMachineTask::handleReadingState(const SystemMessage_t *msg)
                                         if (tp.success)
                                         {
                                                 g_current_book->renderCurrentPage(font_size);
+                                                g_current_book->saveBookmark(); // render后保存书签
                                         }
                                 }
                         }
@@ -430,6 +431,7 @@ void StateMachineTask::handleReadingState(const SystemMessage_t *msg)
                 if (result.success && result.message != nullptr && std::strcmp(result.message, "PREVPAGE") == 0)
                 {
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                         // 用户触摸导致的翻页，重置自动翻页计时器
                         s_one_sec_ticks = 0;
                 }
@@ -437,6 +439,7 @@ void StateMachineTask::handleReadingState(const SystemMessage_t *msg)
                 if (result.success && result.message != nullptr && std::strcmp(result.message, "NEXTPAGE") == 0)
                 {
                         g_current_book->renderCurrentPage(font_size);
+                        g_current_book->saveBookmark(); // render后保存书签
                         // 用户触摸导致的翻页，重置自动翻页计时器
                         s_one_sec_ticks = 0;
                 }

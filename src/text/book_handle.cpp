@@ -1008,7 +1008,7 @@ TextPageResult BookHandle::nextPage()
                       res.page_end_pos, page_completed ? "true" : "false");
 #endif
 
-        saveBookmark();
+        // saveBookmark() 移到render之后调用，降低翻页延迟
     }
     else
     {
@@ -1165,7 +1165,7 @@ TextPageResult BookHandle::prevPage()
                       res.page_end_pos, page_completed ? "true" : "false");
 #endif
 
-        saveBookmark();
+        // saveBookmark() 移到render之后调用，降低翻页延迟
 
 #if DBG_BOOK_HANDLE
         Serial.printf("[BH] prevPage page_index=%zu page_text:\n%s\n", current_page_index, res.page_text.c_str());
@@ -1308,8 +1308,7 @@ bool BookHandle::jumpToPage(size_t page_index)
     Serial.printf("[BH] jumpToPage: 跳转到页面 %zu, 位置 %zu, page_positions.size=%zu\n", page_index, cur_pos, page_positions.size());
 #endif
 
-    // 更新书签，保存新的页面位置
-    saveBookmark();
+    // saveBookmark() 移到render之后调用，降低跳转延迟
 
     // 更新字体缓存（滚动更新）- 如果未被锁定
     if (g_font_buffer_manager.isInitialized() && !g_font_buffer_manager.isInitializationLocked())
