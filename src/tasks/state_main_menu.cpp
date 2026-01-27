@@ -221,6 +221,9 @@ void StateMachineTask::handleMainMenuState(const SystemMessage_t *msg)
 #if DBG_STATE_MACHINE_TASK
                         sm_dbg_printf("创建 BookHandle 失败\n");
 #endif
+                        // 打开失败，可能是文件已被删除，从 history.list 中移除
+                        extern bool removeBookFromHistory(const std::string &book_path);
+                        removeBookFromHistory(book_path);
                     }
                 }
                 else
