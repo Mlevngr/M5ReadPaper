@@ -664,6 +664,10 @@ void WiFiHotspotManager::handleFileDelete() {
                 SDW::SD.remove(idx_fp.c_str());
             }
 
+            // 5) 从 history.list 中删除该书籍记录
+            extern bool removeBookFromHistory(const std::string &book_path);
+            removeBookFromHistory(canonical_fp);
+
             // 如果当前正在阅读的文件与删除的文件相同，尝试回退到默认文件
 #if DBG_WIFI_HOTSPOT
                 Serial.printf("[WIFI_HOTSPOT] comparing current book '%s' with deleted path '%s'\n", g_current_book ? g_current_book->filePath().c_str() : "(null)", path.c_str());

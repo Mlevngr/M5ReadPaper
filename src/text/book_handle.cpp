@@ -1624,6 +1624,123 @@ static bool updateHistoryList(const std::string &book_file_path)
     return true;
 }
 
+// 从 /history.list 中删除指定书籍路径
+static bool removeFromHistoryList(const std::string &book_file_path)
+{
+    const char *HISTORY = "/history.list";
+    const char *TMP = "/history.list.tmp";
+
+    // 标准化路径：确保以 /sd 开头
+    std::string normalized_path = book_file_path;
+    if (normalized_path.rfind("/sd", 0) != 0)
+    {
+        // 如果路径不是以 /sd 开头，添加前缀
+        if (normalized_path[0] != '/')
+            normalized_path = "/" + normalized_path;
+        if (normalized_path.rfind("/sd/", 0) != 0)
+            normalized_path = "/sd" + normalized_path;
+    }
+
+#if DBG_BOOK_HANDLE
+    Serial.printf("[BH] removeFromHistoryList: 删除路径 '%s'\n", normalized_path.c_str());
+#endif
+
+    if (!SDW::SD.exists(HISTORY))
+    {
+#if DBG_BOOK_HANDLE
+        Serial.println("[BH] removeFromHistoryList: history.list 不存在");
+#endif
+        return true; // 没有历史文件，视为成功
+    }
+
+    std::vector<std::string> old_lines;
+
+    // 读取已有历史
+    {
+        AutoCloseFile f(SDW::SD.open(HISTORY, "r"));
+        if (f)
+        {
+            while (f.get().available())
+            {
+                String line = f.get().readStringUntil('\n');
+                line.trim();
+                if (line.length() == 0)
+                    continue;
+                old_lines.push_back(std::string(line.c_str()));
+            }
+        }
+    }
+
+    // 过滤掉要删除的路径
+    std::vector<std::string> new_lines;
+    bool found = false;
+    for (const auto &ln : old_lines)
+    {
+        if (ln == normalized_path)
+        {
+            found = true;
+#if DBG_BOOK_HANDLE
+            Serial.printf("[BH] removeFromHistoryList: 找到并跳过 '%s'\n", ln.c_str());
+#endif
+            continue; // 跳过要删除的条目
+        }
+        new_lines.push_back(ln);
+    }
+
+    if (!found)
+    {
+#if DBG_BOOK_HANDLE
+        Serial.printf("[BH] removeFromHistoryList: 未找到路径 '%s'，无需修改\n", normalized_path.c_str());
+#endif
+        return true; // 没找到也算成功
+    }
+
+    // 写入临时文件
+    File tf = SDW::SD.open(TMP, "w");
+    if (!tf)
+    {
+#if DBG_BOOK_HANDLE
+        Serial.println("[BH] removeFromHistoryList: 无法创建临时文件");
+#endif
+        return false;
+    }
+    for (const auto &s : new_lines)
+    {
+        tf.println(s.c_str());
+    }
+    tf.close();
+
+    // 原子替换历史文件
+    if (!SDW::SD.rename(TMP, HISTORY))
+    {
+        // 备用方式：覆盖目标文件
+        File hf = SDW::SD.open(HISTORY, "w");
+        if (!hf)
+        {
+            SDW::SD.remove(TMP);
+#if DBG_BOOK_HANDLE
+            Serial.println("[BH] removeFromHistoryList: 替换失败");
+#endif
+            return false;
+        }
+        for (const auto &s : new_lines)
+            hf.println(s.c_str());
+        hf.close();
+        SDW::SD.remove(TMP);
+    }
+
+#if DBG_BOOK_HANDLE
+    Serial.printf("[BH] removeFromHistoryList: 成功删除 '%s'\n", normalized_path.c_str());
+#endif
+    return true;
+}
+
+// 公共接口：从 history.list 中删除指定书籍
+bool removeBookFromHistory(const std::string &book_path)
+{
+    return removeFromHistoryList(book_path);
+}
+
 std::string getBookmarkFileName(const std::string &book_file_path)
 {
     // 为避免不同路径下同名文件的书签冲突，使用完整路径生成书签文件名

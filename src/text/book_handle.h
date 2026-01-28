@@ -393,3 +393,6 @@ std::string getBookmarkFileName(const std::string &book_file_path);    // 获取
 std::string getRecordFileName(const std::string &book_file_path);      // 获取阅读记录文件名（.rec）
 // Remove index files (page/progress/complete) for a given book path. Public so UI can call it too.
 void removeIndexFilesForBookForPath(const std::string &book_file_path);
+
+// 从 history.list 中删除指定书籍
+bool removeBookFromHistory(const std::string &book_path);
