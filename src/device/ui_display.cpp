@@ -196,6 +196,16 @@ void display_set_rotation(int rotation)
 #if DBG_UI_DISPLAY
     Serial.printf("[DISPLAY] set rotation wrapper: requested=%d\n", rotation);
 #endif
+    // 如果当前旋转已是目标值，则无需再次设置，避免触发无意义刷新
+    int cur = M5.Display.getRotation();
+    if (cur == rotation)
+    {
+#if DBG_UI_DISPLAY
+        Serial.printf("[DISPLAY] rotation unchanged (%d), skip setRotation\n", rotation);
+#endif
+        return;
+    }
+
     // Ensure display is awake for rotation change
     M5.Display.powerSaveOff();
     delay(10); // small delay to let controller wake
