@@ -5,6 +5,8 @@
 #include "test/per_file_debug.h"
 #include "text/bin_font_print.h"
 
+#define USEBACK 1
+
 extern M5Canvas *g_canvas;
 extern GlobalConfig g_config;
 
@@ -95,61 +97,14 @@ namespace PNGEncoder
 
         return (b << 16) | a;
     }
-
-    // 无压缩的 zlib 格式封装
-    bool deflate_compress(const uint8_t *input, size_t input_len, std::vector<uint8_t> &output)
-    {
-        // zlib 头部（2字节）
-        // CMF = 0x78 (CM=8 (deflate), CINFO=7 (32K window))
-        // FLG = 0x01 (FCHECK, no preset dict, default compression)
-        output.push_back(0x78);
-        output.push_back(0x01);
-
-        // 将数据分成最大 65535 字节的块（无压缩块）
-        const size_t MAX_BLOCK_SIZE = 65535;
-        size_t offset = 0;
-
-        while (offset < input_len)
-        {
-            size_t block_size = (input_len - offset < MAX_BLOCK_SIZE)
-                                    ? (input_len - offset)
-                                    : MAX_BLOCK_SIZE;
-            bool is_final = (offset + block_size >= input_len);
-
-            // 块头：BFINAL(1bit) + BTYPE(2bits, 00=无压缩)
-            uint8_t block_header = is_final ? 0x01 : 0x00; // BFINAL=1/0, BTYPE=00
-            output.push_back(block_header);
-
-            // LEN (2 bytes, little-endian)
-            output.push_back(block_size & 0xFF);
-            output.push_back((block_size >> 8) & 0xFF);
-
-            // NLEN (2 bytes, little-endian, one's complement of LEN)
-            uint16_t nlen = ~block_size;
-            output.push_back(nlen & 0xFF);
-            output.push_back((nlen >> 8) & 0xFF);
-
-            // 数据
-            output.insert(output.end(), input + offset, input + offset + block_size);
-
-            offset += block_size;
-        }
-
-        // Adler-32 校验和（4字节，大端序）
-        uint32_t checksum = adler32(input, input_len);
-        output.push_back((checksum >> 24) & 0xFF);
-        output.push_back((checksum >> 16) & 0xFF);
-        output.push_back((checksum >> 8) & 0xFF);
-        output.push_back(checksum & 0xFF);
-
-        return true;
-    }
 }
 
 // ensureScreenshotFolder() 已在 book_handle.cpp 中定义
 // 在此只需要声明（通过包含 text/book_handle.h）
 #include "text/book_handle.h"
 #include "ui/ui_canvas_image.h"
+// 需要检查当前系统状态以避免在 IDLE 状态启用背景
+#include "tasks/state_machine_task.h"
 
 bool screenShot()
 {
@@ -171,18 +126,18 @@ bool screenShot()
     }
 
     // 推送截图图标
-    //ui_push_image_to_display_direct("/spiffs/screenshot.png", 270-32, 480-32);
+    // ui_push_image_to_display_direct("/spiffs/screenshot.png", 270-32, 480-32);
     // 生成一个临时的 canvas（140x40），绘制背景并 push 到屏幕 (200,0)
     {
         M5Canvas tempCanvas(&M5.Display);
-        if (tempCanvas.createSprite(180, 40)) {
+        if (tempCanvas.createSprite(180, 40))
+        {
             tempCanvas.fillRect(0, 0, 180, 40, TFT_WHITE);
-            bin_font_print("截图中",32,0,180,0,4,false, &tempCanvas ,TEXT_ALIGN_CENTER,180,false,false,false,true);
+            bin_font_print("截图中", 32, 0, 180, 0, 4, false, &tempCanvas, TEXT_ALIGN_CENTER, 180, false, false, false, true);
             tempCanvas.pushSprite(180, 460);
             tempCanvas.deleteSprite();
         }
     }
-    
 
     // 获取当前时间
     time_t now = time(nullptr);
@@ -230,8 +185,8 @@ bool screenShot()
     ihdr_chunk.insert(ihdr_chunk.end(), {'I', 'H', 'D', 'R'});
     PNGEncoder::write_be32(ihdr_chunk, width);
     PNGEncoder::write_be32(ihdr_chunk, height);
-    ihdr_chunk.push_back(8);                                        // bit depth (8-bit grayscale)
-    ihdr_chunk.push_back(0);                                        // color type (0 = grayscale)
+    ihdr_chunk.push_back(8);                                        // bit depth (8-bit)
+    ihdr_chunk.push_back(3);                                        // color type (3 = indexed-color)
     ihdr_chunk.push_back(0);                                        // compression method
     ihdr_chunk.push_back(0);                                        // filter method
     ihdr_chunk.push_back(0);                                        // interlace method
@@ -244,23 +199,239 @@ bool screenShot()
     // 分块处理图像数据以减少内存占用
     const int ROWS_PER_CHUNK = 80; // 增加到80行以减少循环开销（~43KB/块，仍然安全）
     std::vector<uint8_t> compressed_data;
-    compressed_data.reserve(height * (width + 1) / 2); // 预估压缩后大小
+    // 预估压缩后大小：每像素 1 字节索引 + 每行 1 字节滤波器
+    compressed_data.reserve(height * (width + 1) / 2);
 
-    // zlib 头部
-    compressed_data.push_back(0x78);
-    compressed_data.push_back(0x01);
+    // 如果启用了背景叠加且处于非 dark 模式，尝试载入背景图到临时 canvas（放在 PLTE 之前以便采样）
+    M5Canvas bgCanvas(&M5.Display);
+    bool have_bg = false;
+#if USEBACK
+    if (!g_config.dark && getCurrentSystemState() != STATE_IDLE)
+    {
+        if (bgCanvas.createSprite(width, height))
+        {
+            // Check for scback.png on SD root (use /sd/ prefix when calling ui helpers)
+            File scf = SDW::SD.open("/scback.png", "r");
+            if (scf)
+            {
+                scf.close();
+                bgCanvas.fillRect(0, 0, width, height, TFT_WHITE);
+                ui_push_image_to_canvas("/sd/scback.png", 0, 0, &bgCanvas, false);
+                have_bg = true;
+            }
+            else
+            {
+                // no background file on SD; free the sprite and continue without background
+                bgCanvas.deleteSprite();
+            }
+        }
+    }
+#endif
 
+    // 自适应 256 色调色板：使用 12-bit 直方图 (r4,g4,b4 -> 4096 bins) 采样 g_canvas 与 scback（若存在）
+    const int PALETTE_MAX = 256;
+    const int HIST_SIZE = 4096; // 12-bit
+    std::vector<uint32_t> hist(HIST_SIZE);
+    std::fill(hist.begin(), hist.end(), 0);
+
+    int sample_step = (width * height > 200000) ? 4 : 2;
+    for (int y = 0; y < height; y += sample_step)
+    {
+        for (int x = 0; x < width; x += sample_step)
+        {
+            uint16_t color = g_canvas->readPixel(x, y);
+            uint8_t r5 = (color >> 11) & 0x1F;
+            uint8_t g6 = (color >> 5) & 0x3F;
+            uint8_t b5 = color & 0x1F;
+            uint8_t r4 = r5 >> 1;
+            uint8_t g4 = g6 >> 2;
+            uint8_t b4 = b5 >> 1;
+            int idx12 = (r4 << 8) | (g4 << 4) | b4;
+            hist[idx12]++;
+
+            if (have_bg)
+            {
+                uint16_t bgc = bgCanvas.readPixel(x, y);
+                uint8_t br5 = (bgc >> 11) & 0x1F;
+                uint8_t bg6 = (bgc >> 5) & 0x3F;
+                uint8_t bb5 = bgc & 0x1F;
+                uint8_t br4 = br5 >> 1;
+                uint8_t bg4 = bg6 >> 2;
+                uint8_t bb4 = bb5 >> 1;
+                int bidx12 = (br4 << 8) | (bg4 << 4) | bb4;
+                hist[bidx12]++;
+            }
+        }
+    }
+
+    std::vector<std::pair<uint32_t, int>> freq;
+    for (int i = 0; i < HIST_SIZE; ++i)
+    {
+        if (hist[i] > 0)
+            freq.emplace_back(hist[i], i);
+    }
+    std::sort(freq.begin(), freq.end(), [](const std::pair<uint32_t, int> &a, const std::pair<uint32_t, int> &b)
+              { return a.first > b.first; });
+
+    int palCount = std::min((int)freq.size(), PALETTE_MAX);
+    if (palCount == 0)
+        palCount = 1;
+
+    // 强制包含 RGB(100,100,100) 用于 lum==28 的特殊淡灰色
+    uint8_t gray100_r4 = (uint8_t)((100 * 15) / 255); // ≈5
+    uint8_t gray100_g4 = gray100_r4;
+    uint8_t gray100_b4 = gray100_r4;
+    int gray100_idx12 = (gray100_r4 << 8) | (gray100_g4 << 4) | gray100_b4;
+    
+    // 检查是否已在 freq 中
+    bool has_gray100 = false;
+    for (const auto &f : freq)
+    {
+        if (f.second == gray100_idx12)
+        {
+            has_gray100 = true;
+            break;
+        }
+    }
+    // 如果不存在且调色板未满，插入到 freq 开头（高优先级）
+    if (!has_gray100 && palCount < PALETTE_MAX)
+    {
+        freq.insert(freq.begin(), {1, gray100_idx12});
+        palCount++;
+    }
+    else if (!has_gray100 && palCount == PALETTE_MAX)
+    {
+        // 调色板已满，替换最后一个（频率最低）
+        freq[palCount - 1] = {1, gray100_idx12};
+    }
+
+    std::vector<uint8_t> palette;
+    palette.reserve(palCount * 3);
+    std::vector<int> selected_indices;
+    selected_indices.reserve(palCount);
+    for (int i = 0; i < palCount; ++i)
+    {
+        int idx12 = freq[i].second;
+        selected_indices.push_back(idx12);
+        uint8_t r4 = (idx12 >> 8) & 0x0F;
+        uint8_t g4 = (idx12 >> 4) & 0x0F;
+        uint8_t b4 = idx12 & 0x0F;
+        uint8_t r8 = (uint8_t)((r4 * 255 + 7) / 15);
+        uint8_t g8 = (uint8_t)((g4 * 255 + 7) / 15);
+        uint8_t b8 = (uint8_t)((b4 * 255 + 7) / 15);
+        palette.push_back(r8);
+        palette.push_back(g8);
+        palette.push_back(b8);
+    }
+
+    std::vector<uint8_t> map12(HIST_SIZE, 0xFF);
+    int gray100_pal_idx = -1;
+    for (int i = 0; i < palCount; ++i)
+    {
+        map12[selected_indices[i]] = (uint8_t)i;
+        if (selected_indices[i] == gray100_idx12)
+            gray100_pal_idx = i;
+    }
+    for (int i = 0; i < HIST_SIZE; ++i)
+    {
+        if (map12[i] != 0xFF)
+            continue;
+        uint8_t r4 = (i >> 8) & 0x0F;
+        uint8_t g4 = (i >> 4) & 0x0F;
+        uint8_t b4 = i & 0x0F;
+        int best = 0;
+        int bestd = INT_MAX;
+        for (int p = 0; p < palCount; ++p)
+        {
+            int pr4 = (selected_indices[p] >> 8) & 0x0F;
+            int pg4 = (selected_indices[p] >> 4) & 0x0F;
+            int pb4 = selected_indices[p] & 0x0F;
+            int dr = (int)r4 - pr4;
+            int dg = (int)g4 - pg4;
+            int db = (int)b4 - pb4;
+            int d = dr * dr + dg * dg + db * db;
+            if (d < bestd)
+            {
+                bestd = d;
+                best = p;
+            }
+        }
+        map12[i] = (uint8_t)best;
+    }
+
+    // 写入 PLTE chunk
+    std::vector<uint8_t> plte_chunk;
+    PNGEncoder::write_be32(plte_chunk, (uint32_t)palette.size());
+    plte_chunk.insert(plte_chunk.end(), {'P', 'L', 'T', 'E'});
+    plte_chunk.insert(plte_chunk.end(), palette.begin(), palette.end());
+    uint32_t plte_crc = PNGEncoder::crc(plte_chunk.data() + 4, 4 + palette.size());
+    PNGEncoder::write_be32(plte_chunk, plte_crc);
+    file.write(plte_chunk.data(), plte_chunk.size());
+
+    // 构建 65536 大小的 rgb565 -> palette 索引查表，加速像素映射（约64KB）
+    std::vector<uint8_t> rgb565_map(65536);
+    for (int c = 0; c < 65536; ++c)
+    {
+        uint16_t color = (uint16_t)c;
+        uint8_t r5 = (color >> 11) & 0x1F;
+        uint8_t g6 = (color >> 5) & 0x3F;
+        uint8_t b5 = color & 0x1F;
+        uint8_t r4 = r5 >> 1;
+        uint8_t g4 = g6 >> 2;
+        uint8_t b4 = b5 >> 1;
+        int idx12 = (r4 << 8) | (g4 << 4) | b4;
+        rgb565_map[c] = map12[idx12];
+    }
+
+    // 使用流式写入 IDAT（多 IDAT 块），以减少峰值内存占用
+    bool first_idat = true;
     uint32_t adler_a = 1;
     uint32_t adler_b = 0;
     const uint32_t MOD_ADLER = 65521;
+
+    // 通用亮度到映射值的函数（不包含白色->背景特殊处理）
+    auto map_lum_generic = [&](uint16_t lum) -> uint8_t
+    {
+        uint8_t mapped_lum_local;
+        if (lum >= 210)
+        {
+            mapped_lum_local = (uint8_t)(170 + ((lum - 210) * 17) / 45);
+        }
+        else if (lum >= 180)
+        {
+            mapped_lum_local = (uint8_t)(153 + ((lum - 180) * 16) / 30);
+        }
+        else if (lum >= 130)
+        {
+            mapped_lum_local = (uint8_t)(134 + ((lum - 130) * 24) / 50);
+        }
+        else if (lum >= 100)
+        {
+            mapped_lum_local = (uint8_t)(102 + ((lum - 100) * 33) / 30);
+        }
+        else
+        {
+            mapped_lum_local = (uint8_t)lum;
+        }
+/*        if (lum >= 10 && lum < 28)
+        {
+            mapped_lum_local = 170;
+        }
+*/
+        return mapped_lum_local;
+    };
+
+    // 预分配并复用 chunk_data，避免每次分配/释放
+    std::vector<uint8_t> chunk_data;
+    chunk_data.reserve(ROWS_PER_CHUNK * (1 + width));
 
     for (int chunk_start = 0; chunk_start < height; chunk_start += ROWS_PER_CHUNK)
     {
         int chunk_rows = (chunk_start + ROWS_PER_CHUNK > height) ? (height - chunk_start) : ROWS_PER_CHUNK;
 
-        // 为这一块分配缓冲区
-        std::vector<uint8_t> chunk_data;
-        chunk_data.reserve(chunk_rows * (width + 1));
+        // 复用缓冲区
+        chunk_data.clear();
+        chunk_data.reserve(chunk_rows * (1 + width));
 
         // 读取像素数据
         for (int y = chunk_start; y < chunk_start + chunk_rows; y++)
@@ -268,70 +439,91 @@ bool screenShot()
             chunk_data.push_back(0); // 滤波器类型 0 (None)
             for (int x = 0; x < width; x++)
             {
-                // 从 Canvas 读取为 RGB565（uint16_t），精确计算亮度后直接量化为 16 级
+                // 从 Canvas 读取为 RGB565（uint16_t），并构造 12-bit 索引 (r4,g4,b4)
                 uint16_t color = g_canvas->readPixel(x, y);
-                // RGB565 -> 各分量
                 uint8_t r5 = (color >> 11) & 0x1F;
                 uint8_t g6 = (color >> 5) & 0x3F;
                 uint8_t b5 = color & 0x1F;
-
-                // 扩展到 8-bit（带四舍五入）
                 uint8_t r8 = (uint8_t)((r5 * 255 + 15) / 31);
                 uint8_t g8 = (uint8_t)((g6 * 255 + 31) / 63);
                 uint8_t b8 = (uint8_t)((b5 * 255 + 15) / 31);
-
-                // 使用标准加权亮度（YCbCr 混合系数），然后无抖动量化到 16 阶
                 uint16_t lum = (uint16_t)((299 * r8 + 587 * g8 + 114 * b8 + 500) / 1000); // 0-255
-                
-                // ⚠️ 关键修复：直接使用亮度值，不做提前量化，以保留精度
-                // 之前的 ((lum / 17) * 17) 会丢失信息导致灰度错误映射
-                
-                // 截图专用色彩映射（不影响设备显示）：
-                // 按实际亮度值分析并映射，确保所有灰度可见且深于背景色 #d7c8cb (206)
-                // 
-                // 实测颜色亮度（从亮到暗）：
-                // - 纯白 0xFFFF -> 255
-                // - TFT_LIGHTGREY 0xD69A (214,211,214) -> 213
-                // - GREY_LEVEL_LIGHT 0xC618 (198,195,198) -> 197
-                // - GREY_MAP_COLOR 0x8430 (132,134,132) -> 134
-                // - GREY_LEVEL_MID 0x8430 (132,134,132) -> 134
-                // - TFT_DARKGREY 0x7BEF (124,126,124) -> 126
-                // - GREY_LEVEL_DARK 0x4208 (66,65,66) -> 66
-                //
-                // 映射策略（基于亮度范围，保持相对顺序）：
-                // 1. 纯白(255) -> 204 背景色
-                // 2. 高亮灰(210-254) 包含TFT_LIGHTGREY(213) -> 映射到170-187
-                // 3. 中亮灰(180-209) 包含GREY_LEVEL_LIGHT(197) -> 映射到153-169
-                // 4. 中灰(130-179) 包含GREY_MAP_COLOR(134) -> 映射到136-152（浅灰，可见）
-                // 5. 中深灰(100-129) 包含TFT_DARKGREY(126) -> 映射到102-135
-                // 6. 深灰(60-99) 包含GREY_LEVEL_DARK(66) -> 保持
-                // 7. 极深灰(0-59) -> 保持
-                
-                uint8_t mapped_lum;
-                if (lum == 255) {
-                    // 纯白 -> 背景色
-                    mapped_lum = 204;
-                } else if (lum >= 210) {
-                    // TFT_LIGHTGREY 区域 -> 浅灰（170-187）
-                    mapped_lum = (uint8_t)(170 + ((lum - 210) * 17) / 45);
-                } else if (lum >= 180) {
-                    // GREY_LEVEL_LIGHT 区域 -> 中浅灰（153-169）
-                    mapped_lum = (uint8_t)(153 + ((lum - 180) * 16) / 30);
-                } else if (lum >= 130) {
-                    // GREY_MAP_COLOR 区域 -> 保持中灰（136-152），确保可见
-                    mapped_lum = (uint8_t)(136 + ((lum - 130) * 16) / 50);
-                } else if (lum >= 100) {
-                    // TFT_DARKGREY 区域 -> 保持（102-135）
-                    mapped_lum = (uint8_t)(102 + ((lum - 100) * 33) / 30);
-                } else {
-                    // 深灰区域 -> 保持不变
-                    mapped_lum = (uint8_t)lum;
-                }
-                
-                // 最后量化到16阶
-                uint8_t quant = (uint8_t)((mapped_lum / 17) * 17);
 
-                chunk_data.push_back(quant);
+                // 使用预计算的 rgb565 -> palette 查表以加速映射
+                uint8_t pal_idx_fg = 0;
+                if (!rgb565_map.empty())
+                {
+                    pal_idx_fg = rgb565_map[color];
+                }
+                else
+                {
+                    uint8_t r4 = r5 >> 1; // 0..15
+                    uint8_t g4 = g6 >> 2; // 0..15
+                    uint8_t b4 = b5 >> 1; // 0..15
+                    int idx12_fg = (r4 << 8) | (g4 << 4) | b4;
+                    pal_idx_fg = map12[idx12_fg];
+                }
+
+                if (have_bg)
+                {
+                    // 特殊处理：lum==28 强制映射到淡灰色 RGB(100,100,100)
+                    if (lum == 28 && gray100_pal_idx >= 0)
+                    {
+                        chunk_data.push_back((uint8_t)gray100_pal_idx);
+                    }
+                    else
+                    {
+                        uint16_t bg_color = bgCanvas.readPixel(x, y);
+                        uint8_t br5 = (bg_color >> 11) & 0x1F;
+                        uint8_t bg6 = (bg_color >> 5) & 0x3F;
+                        uint8_t bb5 = bg_color & 0x1F;
+                        uint8_t br4 = br5 >> 1;
+                        uint8_t bg4 = bg6 >> 2;
+                        uint8_t bb4 = bb5 >> 1;
+                        int idx12_bg = (br4 << 8) | (bg4 << 4) | bb4;
+                        uint8_t pal_idx_bg = 0;
+                        if (!rgb565_map.empty())
+                            pal_idx_bg = rgb565_map[bg_color];
+                        else
+                            pal_idx_bg = map12[idx12_bg];
+
+                        if (lum == 255)
+                        {
+                            chunk_data.push_back(pal_idx_bg);
+                        }
+                        else
+                        {
+                            chunk_data.push_back(pal_idx_fg);
+                        }
+                    }
+                }
+                else
+                {
+                    // 无背景：灰度量化后映射到 palette 空间
+                    uint8_t mapped_here;
+                    if (lum == 255)
+                    {
+                        mapped_here = 204;
+                    }
+                    else
+                    {
+                        mapped_here = map_lum_generic(lum);
+                    }
+                    uint8_t final_quant = (uint8_t)((mapped_here / 17) * 17);
+                    // 特殊处理：lum==28 强制映射到淡灰色 RGB(100,100,100)
+                    if (lum == 28 && gray100_pal_idx >= 0)
+                    {
+                        chunk_data.push_back((uint8_t)gray100_pal_idx);
+                    }
+                    else
+                    {
+                        uint8_t r4_g = (uint8_t)((final_quant * 15) / 255);
+                        uint8_t g4_g = r4_g;
+                        uint8_t b4_g = (uint8_t)((final_quant * 15) / 255);
+                        int idx12_gray = (r4_g << 8) | (g4_g << 4) | b4_g;
+                        chunk_data.push_back(map12[idx12_gray]);
+                    }
+                }
             }
         }
 
@@ -342,54 +534,94 @@ bool screenShot()
             adler_b = (adler_b + adler_a) % MOD_ADLER;
         }
 
-        // 写入无压缩块
-        bool is_final = (chunk_start + chunk_rows >= height);
-        uint8_t block_header = is_final ? 0x01 : 0x00;
-        compressed_data.push_back(block_header);
+        // 写入无压缩块（分割为 <=65535 字节的子块，逐个写入 IDAT）
+        bool chunk_is_final = (chunk_start + chunk_rows >= height);
+        size_t offset = 0;
+        const size_t MAX_BLOCK_SIZE = 65535;
+        while (offset < chunk_data.size())
+        {
+            size_t sub_size = std::min(MAX_BLOCK_SIZE, chunk_data.size() - offset);
+            bool sub_is_final = (chunk_is_final && (offset + sub_size >= chunk_data.size()));
 
-        uint16_t block_size = chunk_data.size();
-        compressed_data.push_back(block_size & 0xFF);
-        compressed_data.push_back((block_size >> 8) & 0xFF);
+            // 构造较小的 deflate 无压缩子块头（包含 zlib 头仅写入首个子块）
+            std::vector<uint8_t> hdr;
+            if (first_idat)
+            {
+                hdr.push_back(0x78);
+                hdr.push_back(0x01);
+                first_idat = false;
+            }
+            uint8_t block_header_sub = sub_is_final ? 0x01 : 0x00;
+            hdr.push_back(block_header_sub);
+            uint16_t sub_block_size16 = (uint16_t)sub_size;
+            hdr.push_back(sub_block_size16 & 0xFF);
+            hdr.push_back((sub_block_size16 >> 8) & 0xFF);
+            uint16_t sub_nlen = ~sub_block_size16;
+            hdr.push_back(sub_nlen & 0xFF);
+            hdr.push_back((sub_nlen >> 8) & 0xFF);
 
-        uint16_t nlen = ~block_size;
-        compressed_data.push_back(nlen & 0xFF);
-        compressed_data.push_back((nlen >> 8) & 0xFF);
+            // IDAT chunk 长度 = hdr.size() + sub_size
+            uint32_t data_len = (uint32_t)(hdr.size() + sub_size);
+            uint8_t len_be[4];
+            len_be[0] = (data_len >> 24) & 0xFF;
+            len_be[1] = (data_len >> 16) & 0xFF;
+            len_be[2] = (data_len >> 8) & 0xFF;
+            len_be[3] = (data_len) & 0xFF;
 
-        compressed_data.insert(compressed_data.end(), chunk_data.begin(), chunk_data.end());
+            // 写入长度和类型
+            file.write(len_be, 4);
+            file.write((const uint8_t *)"IDAT", 4);
+
+            // 增量计算 CRC（先 'IDAT'）
+            uint32_t crc_val = PNGEncoder::update_crc(0xffffffffL, (const uint8_t *)"IDAT", 4);
+
+            // 写入 hdr 并更新 CRC
+            file.write(hdr.data(), hdr.size());
+            crc_val = PNGEncoder::update_crc(crc_val, hdr.data(), hdr.size());
+
+            // 写入数据块并更新 CRC
+            file.write(chunk_data.data() + offset, sub_size);
+            crc_val = PNGEncoder::update_crc(crc_val, chunk_data.data() + offset, sub_size);
+
+            crc_val ^= 0xffffffffL;
+            uint8_t crc_be[4];
+            crc_be[0] = (crc_val >> 24) & 0xFF;
+            crc_be[1] = (crc_val >> 16) & 0xFF;
+            crc_be[2] = (crc_val >> 8) & 0xFF;
+            crc_be[3] = (crc_val) & 0xFF;
+            file.write(crc_be, 4);
+
+            offset += sub_size;
+        }
 
         // 释放块数据内存
         chunk_data.clear();
         chunk_data.shrink_to_fit();
     }
 
-    // Adler-32 校验和
+    // Adler-32 校验和（写入 zlib 流尾部）
     uint32_t checksum = (adler_b << 16) | adler_a;
-    compressed_data.push_back((checksum >> 24) & 0xFF);
-    compressed_data.push_back((checksum >> 16) & 0xFF);
-    compressed_data.push_back((checksum >> 8) & 0xFF);
-    compressed_data.push_back(checksum & 0xFF);
+    std::vector<uint8_t> adler_bytes;
+    adler_bytes.push_back((checksum >> 24) & 0xFF);
+    adler_bytes.push_back((checksum >> 16) & 0xFF);
+    adler_bytes.push_back((checksum >> 8) & 0xFF);
+    adler_bytes.push_back(checksum & 0xFF);
 
-    // 优化：流式写入 IDAT chunk，避免二次内存分配（节省 ~520KB 峰值内存）
-    // 1. 先写入 IDAT 长度和类型
-    std::vector<uint8_t> idat_header;
-    PNGEncoder::write_be32(idat_header, compressed_data.size());
-    idat_header.insert(idat_header.end(), {'I', 'D', 'A', 'T'});
-    file.write(idat_header.data(), idat_header.size());
-    
-    // 2. 写入压缩数据本体
-    file.write(compressed_data.data(), compressed_data.size());
-    
-    // 3. 计算并写入 CRC（需要包含类型标识'IDAT'和数据）
-    uint32_t idat_crc = PNGEncoder::update_crc(0xffffffffL, (const uint8_t*)"IDAT", 4);
-    idat_crc = PNGEncoder::update_crc(idat_crc, compressed_data.data(), compressed_data.size());
-    idat_crc ^= 0xffffffffL;
-    std::vector<uint8_t> crc_bytes;
-    PNGEncoder::write_be32(crc_bytes, idat_crc);
-    file.write(crc_bytes.data(), crc_bytes.size());
+    // 将 Adler32 写为最后的 IDAT chunk
+    std::vector<uint8_t> final_idat;
+    PNGEncoder::write_be32(final_idat, (uint32_t)adler_bytes.size());
+    final_idat.insert(final_idat.end(), {'I', 'D', 'A', 'T'});
+    final_idat.insert(final_idat.end(), adler_bytes.begin(), adler_bytes.end());
+    uint32_t final_crc = PNGEncoder::update_crc(0xffffffffL, (const uint8_t *)"IDAT", 4);
+    final_crc = PNGEncoder::update_crc(final_crc, adler_bytes.data(), adler_bytes.size());
+    final_crc ^= 0xffffffffL;
+    PNGEncoder::write_be32(final_idat, final_crc);
+    file.write(final_idat.data(), final_idat.size());
 
-    // 释放内存
-    compressed_data.clear();
-    compressed_data.shrink_to_fit();
+    if (have_bg)
+    {
+        bgCanvas.deleteSprite();
+    }
 
     // 写入 IEND chunk
     const uint8_t iend_chunk[] = {
@@ -401,12 +633,13 @@ bool screenShot()
 
     size_t total_size = file.size();
     file.close();
+    (void)total_size;
 
 #if DBG_SCREENSHOT
     Serial.printf("[SCREENSHOT] 截图成功: %s (%d bytes)\n", filename, total_size);
 #endif
 
-    bin_font_flush_canvas(false,false,true,NOEFFECT);
+    bin_font_flush_canvas(false, false, true, NOEFFECT);
 
     return true;
 }

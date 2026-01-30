@@ -5,6 +5,7 @@
   let currentPage = 1;
   let cache = { book:null, font:null, image:null, screenshot:null };
   let selectedFiles = [];
+  let selectedScbackFile = null;
   let selectedForDelete = new Set();
   
   // 后端分页支持检测（首次请求时自动检测）
@@ -24,12 +25,18 @@
   const hint = el('hint');
   const btnSyncTime = el('btnSyncTime');
   const uploadBox = el('uploadBox');
+  const scbackBox = el('scbackBox');
+  const btnScbackSelect = el('btnScbackSelect');
+  const btnScbackUpload = el('btnScbackUpload');
+  const btnScbackDelete = el('btnScbackDelete');
+  const scbackFileInput = el('scbackFileInput');
+  const scbackInfo = el('scbackInfo');
 
   const hints = {
     book:'支持 unicode/GBK 编码的 txt 文件。',
     font:'请上传工具生成的 font.bin；<1.2.9 旧版本字体建议重新生成。',
     image:'锁屏图片建议 540x960，支持透明 png，优先同名图片 > default.png > 系统自带。',
-    screenshot:'设备截图存储目录。双击屏幕左上角(230,0)-(310,80)区域可触发截图。仅支持下载和删除，不支持上传。'
+    screenshot:'设备截图存储目录。双击屏幕左上角(230,0)-(310,80)区域可触发截图。可设置截图背景（上传 scback.png 到 SD 根目录）',
   };
   const catNames = { book:'书籍', font:'字体', image:'锁屏', screenshot:'截图' };
 
@@ -72,14 +79,9 @@
     const delBtn = document.getElementById('btnDeleteSelected'); if(delBtn) delBtn.disabled = true;
     const selAll = document.getElementById('selectAll'); if(selAll){ selAll.checked=false; selAll.indeterminate=false; }
     
-    // 对于screenshot tab，隐藏上传区域
-    if(uploadBox){
-      if(cat === 'screenshot'){
-        uploadBox.style.display = 'none';
-      } else {
-        uploadBox.style.display = 'block';
-      }
-    }
+    // 对于 screenshot tab，隐藏常规上传区域，显示截图背景设置盒子
+    if(uploadBox){ if(cat === 'screenshot') uploadBox.style.display = 'none'; else uploadBox.style.display = 'block'; }
+    if(scbackBox){ if(cat === 'screenshot') scbackBox.style.display = 'block'; else scbackBox.style.display = 'none'; }
     
     loadList();
   }
@@ -386,6 +388,42 @@
     updateUploadState(cache[currentCat]?cache[currentCat].length:0);
   };
 
+  // 截图背景设置控件逻辑（仅对 screenshot tab 可见）
+  if(btnScbackSelect) btnScbackSelect.onclick = ()=> scbackFileInput.click();
+  if(scbackFileInput) scbackFileInput.onchange = ()=>{
+    const files = Array.from(scbackFileInput.files||[]);
+    if(files.length===0){ selectedScbackFile = null; if(btnScbackUpload) btnScbackUpload.disabled = true; return; }
+    const f = files[0];
+    // Accept any image file; it will be uploaded as scback.png and overwrite the SD root file
+    selectedScbackFile = f;
+    if(btnScbackUpload){ btnScbackUpload.disabled = false; }
+    if(scbackInfo) scbackInfo.textContent = `已选择: ${f.name}`;
+  };
+
+  if(btnScbackUpload) btnScbackUpload.onclick = async ()=>{
+    if(!selectedScbackFile){ toast('请先选择要上传的图片','error'); return; }
+    btnScbackUpload.disabled = true; if(scbackInfo) scbackInfo.textContent = '上传中...'; if(uploadStatus) uploadStatus.textContent = '上传背景: 0%';
+    try{
+      await performScbackUpload(selectedScbackFile, p=>{ if(uploadStatus) uploadStatus.textContent = `上传背景: ${p.toFixed(1)}%`; if(scbackInfo) scbackInfo.textContent = `上传 ${p.toFixed(1)}%`; });
+      toast('背景上传成功','success');
+      // small delay then refresh list
+      await new Promise(r=>setTimeout(r, 400));
+      cache[currentCat]=null; loadList();
+    }catch(e){ toast('上传失败: '+e.message,'error',5000); }
+    finally{ if(btnScbackUpload) btnScbackUpload.disabled = false; if(scbackInfo) scbackInfo.textContent = '上传的图片会保存为 scback.png，并覆盖 SD 根目录的同名文件。'; if(uploadStatus) uploadStatus.textContent = ''; }
+  };
+
+  if(btnScbackDelete) btnScbackDelete.onclick = async ()=>{
+    const ok = await showConfirm('确认删除 SD 根目录下的 scback.png 吗？');
+    if(!ok) return;
+    try{
+      const r = await fetch(`${API_BASE}/delete?path=${encodeURIComponent('/scback.png')}`);
+      const j = await r.json();
+      if(j.ok){ toast('已删除 scback.png','success'); cache[currentCat]=null; await new Promise(r=>setTimeout(r,400)); loadList(); }
+      else toast(j.message||'删除失败','error',5000);
+    }catch(e){ toast('删除失败: '+e.message,'error',5000); }
+  };
+
   // 拖拽
   ['dragenter','dragover','dragleave','drop'].forEach(ev=>{
     uploadBox.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); });
@@ -460,7 +498,7 @@
               return reject(new Error('HTTP '+xhr.status));
             };
             xhr.timeout = 300000; // 5 minutes
-            const fd = new FormData(); fd.append('data', file); xhr.send(fd);
+            const fd = new FormData(); fd.append('data', file, 'scback.png'); xhr.send(fd);
           });
           return res;
         } catch(err){
@@ -491,6 +529,44 @@
       }
     })();
   }
+
+    function performScbackUpload(file,onProgress){
+      const maxRetries = 2;
+      const baseDelay = 500;
+      return (async function(){
+        for(let attempt=0; attempt<=maxRetries; attempt++){
+          try{
+            const res = await new Promise((resolve,reject)=>{
+              const xhr = new XMLHttpRequest();
+              xhr.open('POST', `${API_BASE}/upload?tab=scback`);
+              xhr.upload.onprogress = e=>{ if(e.lengthComputable && onProgress){ onProgress((e.loaded/e.total)*100); } };
+              xhr.onerror=()=>reject(new Error('network'));
+              xhr.ontimeout=()=>reject(new Error('timeout'));
+              xhr.onload=()=>{
+                if(xhr.status===200){
+                  try{ const j=JSON.parse(xhr.responseText||'{}'); if(typeof j.ok!=='undefined'){ if(j.ok) return resolve(j.message||'OK'); else return reject(new Error(j.message||'上传失败')); } }
+                  catch(_){ return resolve(xhr.responseText||'OK'); }
+                  return resolve(xhr.responseText||'OK');
+                }
+                if(xhr.status===413) return reject(new Error('文件过大'));
+                return reject(new Error('HTTP '+xhr.status));
+              };
+              xhr.timeout = 300000;
+              const fd = new FormData(); fd.append('data', file); xhr.send(fd);
+            });
+            return res;
+          } catch(err){
+            if(attempt < maxRetries){
+              const delay = baseDelay * Math.pow(2, attempt);
+              toast(`上传失败，正在重试（第 ${attempt+1} 次）...`, 'info', 2000);
+              await new Promise(r=>setTimeout(r, delay));
+              continue;
+            }
+            throw err;
+          }
+        }
+      })();
+    }
 
   btnSyncTime.onclick = async ()=>{
     btnSyncTime.disabled=true; btnSyncTime.textContent='同步中...';

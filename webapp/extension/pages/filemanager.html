@@ -51,12 +51,23 @@
                 </div>
             </div>
 
+            <div class="col-5 upload-box" id="scbackBox" style="display:none">
+                <div class="mb-05"><strong>截图背景设置</strong></div>
+                <input id="scbackFileInput" type="file" accept="image/*" class="hidden" />
+                <div class="flex-row gap-small">
+                    <button id="btnScbackSelect" class="button is-small">选择</button>
+                    <button id="btnScbackUpload" class="button primary is-small" disabled>上传</button>
+                    <button id="btnScbackDelete" class="button is-small outline">删除</button>
+                    <!--span id="scbackInfo" class="muted">仅支持文件名为 scback.png，上传到 SD 根目录。</span-->
+                </div>
+            </div>
+
             <div class="col-5 upload-box rec-box" id="recBox">
                 <div class="mb-05"><strong>阅读记录</strong></div>
                 <div class="flex-row gap-small">
                     <button id="btnSyncTime" class="button primary is-small">同步时间</button>
-                    <button id="btnBatchRecords" class="button is-small outline" title="查看选中书籍的阅读记录">批量阅读记录</button>
-                    <button id="btnAllRecords" class="button is-small outline" title="查看所有书籍的阅读记录">全部阅读记录</button>
+                    <button id="btnBatchRecords" class="button is-small outline" title="查看选中书籍的阅读记录">批量</button>
+                    <button id="btnAllRecords" class="button is-small outline" title="查看所有书籍的阅读记录">全部</button>
                 </div>
             </div>
         </div>

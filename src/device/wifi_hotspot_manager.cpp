@@ -1219,7 +1219,12 @@ void WiFiHotspotManager::handleFileUploadPost() {
         } else if (uploadTab == "image") {
             uploadDir = "/image/";
         }
-        
+
+        // 支持特殊 tab=scback：不使用上传文件名，而是强制保存为 SD 根目录下的 /scback.png
+        if (uploadTab == "scback") {
+            filename = "/scback.png"; // 强制目标文件名
+        }
+
         // 构建完整路径
         fullPath = uploadDir + filename.substring(1); // 去掉开头的/
         
