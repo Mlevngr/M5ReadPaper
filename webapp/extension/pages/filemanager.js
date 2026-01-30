@@ -36,7 +36,7 @@
     book:'支持 unicode/GBK 编码的 txt 文件。',
     font:'请上传工具生成的 font.bin；<1.2.9 旧版本字体建议重新生成。',
     image:'锁屏图片建议 540x960，支持透明 png，优先同名图片 > default.png > 系统自带。',
-    screenshot:'设备截图存储目录。双击屏幕左上角(230,0)-(310,80)区域可触发截图。可设置截图背景（上传 scback.png 到 SD 根目录）',
+    screenshot:'设备截图存储目录。双击屏幕顶部中央区域可触发截图。可设置截图背景（上传 scback.png 到 SD 根目录）',
   };
   const catNames = { book:'书籍', font:'字体', image:'锁屏', screenshot:'截图' };
 
