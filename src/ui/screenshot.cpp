@@ -206,7 +206,8 @@ bool screenShot()
     M5Canvas bgCanvas(&M5.Display);
     bool have_bg = false;
 #if USEBACK
-    if (!g_config.dark && getCurrentSystemState() != STATE_IDLE)
+    // Only enable background when in READING state
+    if (!g_config.dark && getCurrentSystemState() == STATE_READING)
     {
         if (bgCanvas.createSprite(width, height))
         {
