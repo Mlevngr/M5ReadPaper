@@ -4,6 +4,8 @@
 #include <vector>
 #include "test/per_file_debug.h"
 #include "text/bin_font_print.h"
+#include "current_book.h"
+#include "tasks/state_machine_task.h"
 
 #define USEBACK 1
 
@@ -144,9 +146,54 @@ bool screenShot()
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
 
+    // 获取当前系统状态
+    SystemState_t currentState = getCurrentSystemState();
+    
+    // 根据状态生成文件名前缀
+    char prefix[96];
+    if (currentState == STATE_READING)
+    {
+        // READING状态：使用当前书名作为前缀
+        auto book = current_book_shared();
+        if (book && book->isOpen())
+        {
+            std::string bookName = book->getBookName();
+            // 移除扩展名
+            size_t dotPos = bookName.find_last_of('.');
+            if (dotPos != std::string::npos)
+            {
+                bookName = bookName.substr(0, dotPos);
+            }
+            snprintf(prefix, sizeof(prefix), "%s", bookName.c_str());
+        }
+        else
+        {
+            snprintf(prefix, sizeof(prefix), "READING");
+        }
+    }
+    else
+    {
+        // 其他状态：使用状态枚举名
+        const char* stateNames[] = {
+            "IDLE", "DEBUG", "READING", "READING_QUICK_MENU",
+            "HELP", "INDEX_DISPLAY", "TOC_DISPLAY", "MENU",
+            "MAIN_MENU", "2ND_LEVEL_MENU", "WIRE_CONNECT",
+            "USB_CONNECT", "SHUTDOWN", "SHOW_TIME_REC"
+        };
+        if (currentState >= 0 && currentState < sizeof(stateNames) / sizeof(stateNames[0]))
+        {
+            snprintf(prefix, sizeof(prefix), "%s", stateNames[currentState]);
+        }
+        else
+        {
+            snprintf(prefix, sizeof(prefix), "UNKNOWN");
+        }
+    }
+
     // 生成文件名
-    char filename[128];
-    snprintf(filename, sizeof(filename), "/screenshot/readpaper_screen_%04d_%02d_%02d_%02d_%02d_%02d.png",
+    char filename[256];
+    snprintf(filename, sizeof(filename), "/screenshot/%s_%04d_%02d_%02d_%02d_%02d_%02d.png",
+             prefix,
              timeinfo.tm_year + 1900,
              timeinfo.tm_mon + 1,
              timeinfo.tm_mday,
