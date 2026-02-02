@@ -19,7 +19,7 @@ void show_start_screen(const char *subtitle = nullptr);
  */
 // show_lockscreen: display lock screen with optional text
 // text: message to display on lock screen (default: "坐看云起时")
-void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, const char *text = "坐看云起时", bool isshutdown=false, const char* labelpos = "bottom");
+void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, const char *text = "坐看云起时", bool isshutdown=false, const char* labelpos = "bottom", bool forsnapshot=false);
 
 // 清理锁屏随机图片的候选缓存（例如 SD 卡内容变更时调用）
 void lockscreen_image_cache_invalidate();

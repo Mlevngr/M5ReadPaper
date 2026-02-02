@@ -4,6 +4,8 @@
 #include <vector>
 #include "test/per_file_debug.h"
 #include "text/bin_font_print.h"
+#include "text/book_handle.h"
+#include "ui/ui_lock_screen.h"
 #include "current_book.h"
 #include "tasks/state_machine_task.h"
 
@@ -11,6 +13,7 @@
 
 extern M5Canvas *g_canvas;
 extern GlobalConfig g_config;
+extern float font_size;
 
 // PNG 文件头和必要的辅助函数
 namespace PNGEncoder
@@ -148,7 +151,7 @@ bool screenShot()
 
     // 获取当前系统状态
     SystemState_t currentState = getCurrentSystemState();
-    
+
     // 根据状态生成文件名前缀
     char prefix[96];
     if (currentState == STATE_READING)
@@ -174,12 +177,11 @@ bool screenShot()
     else
     {
         // 其他状态：使用状态枚举名
-        const char* stateNames[] = {
+        const char *stateNames[] = {
             "IDLE", "DEBUG", "READING", "READING_QUICK_MENU",
             "HELP", "INDEX_DISPLAY", "TOC_DISPLAY", "MENU",
             "MAIN_MENU", "2ND_LEVEL_MENU", "WIRE_CONNECT",
-            "USB_CONNECT", "SHUTDOWN", "SHOW_TIME_REC"
-        };
+            "USB_CONNECT", "SHUTDOWN", "SHOW_TIME_REC"};
         if (currentState >= 0 && currentState < sizeof(stateNames) / sizeof(stateNames[0]))
         {
             snprintf(prefix, sizeof(prefix), "%s", stateNames[currentState]);
@@ -276,6 +278,10 @@ bool screenShot()
     }
 #endif
 
+    // 加工g_canvas,
+    if (currentState == STATE_READING)
+        show_lockscreen(PAPER_S3_WIDTH, PAPER_S3_HEIGHT, 30, "SCREENSHOT", true, "top", true);
+
     // 自适应 256 色调色板：使用 12-bit 直方图 (r4,g4,b4 -> 4096 bins) 采样 g_canvas 与 scback（若存在）
     const int PALETTE_MAX = 256;
     const int HIST_SIZE = 4096; // 12-bit
@@ -330,7 +336,7 @@ bool screenShot()
     uint8_t gray100_g4 = gray100_r4;
     uint8_t gray100_b4 = gray100_r4;
     int gray100_idx12 = (gray100_r4 << 8) | (gray100_g4 << 4) | gray100_b4;
-    
+
     // 检查是否已在 freq 中
     bool has_gray100 = false;
     for (const auto &f : freq)
@@ -461,11 +467,11 @@ bool screenShot()
         {
             mapped_lum_local = (uint8_t)lum;
         }
-/*        if (lum >= 10 && lum < 28)
-        {
-            mapped_lum_local = 170;
-        }
-*/
+        /*        if (lum >= 10 && lum < 28)
+                {
+                    mapped_lum_local = 170;
+                }
+        */
         return mapped_lum_local;
     };
 
@@ -687,7 +693,10 @@ bool screenShot()
     Serial.printf("[SCREENSHOT] 截图成功: %s (%d bytes)\n", filename, total_size);
 #endif
 
-    bin_font_flush_canvas(false, false, true, NOEFFECT);
+    if (currentState == STATE_READING)
+        g_current_book->renderCurrentPage(font_size);
+    else
+        bin_font_flush_canvas(false, false, true, NOEFFECT);
 
     return true;
 }

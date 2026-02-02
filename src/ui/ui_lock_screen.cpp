@@ -15,6 +15,7 @@
 #include "config/config_manager.h"
 #include <vector>
 #include "device/efficient_file_scanner.h"
+#include "ui/toc_display.h"
 
 #include "current_book.h"
 extern M5Canvas *g_canvas;
@@ -185,9 +186,9 @@ namespace
                     c = static_cast<char>(c - 'A' + 'a');
 
             bool is_book = (lname.size() >= 4 &&
-                           (lname.find(".txt") != std::string::npos ||
-                            lname.find(".epub") != std::string::npos ||
-                            lname.find(".pdf") != std::string::npos));
+                            (lname.find(".txt") != std::string::npos ||
+                             lname.find(".epub") != std::string::npos ||
+                             lname.find(".pdf") != std::string::npos));
 
             if (!is_book)
                 continue;
@@ -256,8 +257,8 @@ namespace
 
 #if DBG_UI_IMAGE
         Serial.printf("[LOCKSCREEN] Identified %d dedicated images out of %d total\n",
-                     (int)g_lock_image_cache.dedicated_images.size(),
-                     (int)g_lock_image_cache.candidates.size());
+                      (int)g_lock_image_cache.dedicated_images.size(),
+                      (int)g_lock_image_cache.candidates.size());
 #endif
     }
 }
@@ -402,8 +403,8 @@ static bool push_random_sd_image_if_available(const char *dirPath, int x, int y)
 
 #if DBG_UI_IMAGE
     Serial.printf("[LOCKSCREEN] Available for random: %d (excluded %d dedicated)\n",
-                 (int)available_for_random.size(),
-                 (int)g_lock_image_cache.dedicated_images.size());
+                  (int)available_for_random.size(),
+                  (int)g_lock_image_cache.dedicated_images.size());
 #endif
 
     // If no non-dedicated images available, fall back to all candidates
@@ -423,9 +424,12 @@ static bool push_random_sd_image_if_available(const char *dirPath, int x, int y)
 }
 
 // 绘制书名与页码的腰封（Name banner）
-static void draw_name_banner(M5Canvas *canvas, const char *name_with_page, int32_t basey, bool invert = false, int curp = 0, int totalp = 0)
+static void draw_name_banner(M5Canvas *canvas, const char *name_with_page, int32_t basey, bool invert = false, int curp = 0, int totalp = 0, bool forsnapshot = false)
 {
-    canvas->fillRect(0, basey + 2, 540, 56, invert ? TFT_BLACK : TFT_LIGHTGREY);
+    // Bias
+    basey = basey - 3;
+
+    canvas->fillRect(0, basey + 2, 540, 56, invert ? TFT_BLACK : TFT_WHITE);
     canvas->fillRect(0, basey + 5, 540, 50, invert ? TFT_BLACK : TFT_WHITE);
 
     // Protect against divide-by-zero and clamp progress width to [0,540]
@@ -441,14 +445,52 @@ static void draw_name_banner(M5Canvas *canvas, const char *name_with_page, int32
         progress_width = (int)pw;
     }
 
-    canvas->fillRect(0, basey + 12, progress_width, 36, 0xDDD6);
+    // canvas->fillRect(0, basey + 8, PAPER_S3_WIDTH, 44, 0xE75C);
+    // canvas->fillRect(0, basey + 12, progress_width, 36, 0xA554);
+    canvas->fillRect(0, basey + 8, PAPER_S3_WIDTH, 44, 0xF7DE);
+    if (!forsnapshot)
+        canvas->fillRect(0, basey + 13, progress_width, 36, 0xB5D6);
 
-    canvas->drawLine(0, basey + 10, 540, basey + 10, invert ? TFT_WHITE : TFT_BLACK);
-    canvas->drawLine(0, basey + 50, 540, basey + 50, invert ? TFT_WHITE : TFT_BLACK);
+    canvas->drawWideLine(0, basey + 10, 545, basey + 10, 1.1f, invert ? TFT_WHITE : TFT_BLACK);
+    canvas->drawWideLine(0, basey + 50, 545, basey + 50, 1.1f, invert ? TFT_WHITE : TFT_BLACK);
 
-    bin_font_print(name_with_page, 24, invert ? TFT_WHITE : TFT_BLACK, 420, 50, basey + 20 - 1, false, canvas, TEXT_ALIGN_CENTER, 420, g_current_book ? g_current_book->getKeepOrg() : false); // 0.7f * 30 = 21
+    // 绘制书名
+    bin_font_print(name_with_page, 24, invert ? TFT_WHITE : TFT_BLACK, 420, 60, basey + 20 - 1, false, canvas, TEXT_ALIGN_CENTER, 420, g_current_book ? g_current_book->getKeepOrg() : false);
+
+    // 尝试获取并显示当前章节名（如果存在TOC）
+    if (g_current_book && g_current_book->isOpen())
+    {
+        TextPageResult tp = g_current_book->currentPage();
+        if (tp.success)
+        {
+            size_t entry_index;
+            int page, row;
+            bool on_current;
+            if (find_toc_entry_for_position(g_current_book->filePath(), tp.file_pos,
+                                            entry_index, page, row, on_current))
+            {
+                std::string toc_title;
+                if (get_toc_title_for_index(g_current_book->filePath(), entry_index, toc_title))
+                {
+                    // 在书名下方绘制章节名（使用较小字号）
+                    // canvas->fillRect(0, basey + 52, PAPER_S3_WIDTH, 40, 0xF7DE);
+                    canvas->fillRect(0, basey + 52, PAPER_S3_WIDTH, 40, TFT_BLACK);
+                    bin_font_print(toc_title.c_str(), 24, 0, 420, 60, basey + 60, false, canvas, TEXT_ALIGN_CENTER, 420, false, false, false, true);
+                    canvas->drawWideLine(0, basey + 90, 540, basey + 90, 1.1, invert ? TFT_WHITE : TFT_BLACK);
+                    //                    canvas->drawWideLine(30, basey + 65, 30, basey + 75, 2.0, invert ? TFT_WHITE : TFT_BLACK);
+                    //                   canvas->drawWideLine(510, basey + 65, 510, basey + 75, 2.0, invert ? TFT_WHITE : TFT_BLACK);
+                }
+            }
+        }
+    }
+
     drawScrew(g_canvas, 20, basey + 30);
     drawScrew(g_canvas, 520, basey + 30);
+    canvas->drawLine(0, basey + 30, 55, basey + 30, TFT_BLACK);
+    canvas->drawLine(485, basey + 30, 540, basey + 30, TFT_BLACK);
+
+    //    drawScrew(g_canvas, 20, basey + 70);
+    //    drawScrew(g_canvas, 520, basey + 70);
 }
 
 // 绘制左侧垂直条及竖排文摘（vertical banner）
@@ -583,7 +625,7 @@ void show_start_screen(const char *subtitle)
     }
 }
 
-void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, const char *text, bool isshutdown, const char *labelpos)
+void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, const char *text, bool isshutdown, const char *labelpos, bool forsnapshot)
 {
 #if DBG_POWERMGT
     Serial.println("[POWER] 10分钟无操作，自动关机");
@@ -599,27 +641,22 @@ void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, c
         labelpos = labelpos_copy.c_str();
     }
 
-    // Background - 始终显示screen.png
-    /* To support transparent pic
-    //    g_canvas->clear(); // skip clearn back
-    // For transparent lockscreen
-    //    if (g_current_book)
-    //       g_current_book->renderCurrentPage(0, g_canvas);
-    // 锁屏图标
-    */
-    if (getCurrentSystemState() != STATE_IDLE)
+    if (!forsnapshot)
     {
-        ui_push_image_to_display_direct("/spiffs/wait.png", 240, 450);
-        M5.Display.waitDisplay();
-    }
+        if (getCurrentSystemState() != STATE_IDLE)
+        {
+            ui_push_image_to_display_direct("/spiffs/wait.png", 240, 450);
+            M5.Display.waitDisplay();
+        }
 
-    // Try to show a random SD image from /image; fallback to /spiffs/screen.png
-    if (!push_random_sd_image_if_available("/image", 0, 0))
-    {
-        if (g_current_book && g_current_book->getVerticalText())
-            ui_push_image_to_canvas("/spiffs/screen.png", 0, 0, nullptr, true);
-        else
-            ui_push_image_to_canvas("/spiffs/screenH.png", 0, 0, nullptr, true);
+        // Try to show a random SD image from /image; fallback to /spiffs/screen.png
+        if (!push_random_sd_image_if_available("/image", 0, 0))
+        {
+            if (g_current_book && g_current_book->getVerticalText())
+                ui_push_image_to_canvas("/spiffs/screen.png", 0, 0, nullptr, true);
+            else
+                ui_push_image_to_canvas("/spiffs/screenH.png", 0, 0, nullptr, true);
+        }
     }
 
     g_canvas->drawRect(0, 0, 540, 960, TFT_WHITE);
@@ -635,6 +672,10 @@ void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, c
         // 如果当前书籍的showlabel为false，只显示screen.png，跳过其他内容
         if (g_current_book == nullptr || !g_current_book->getShowLabel())
         {
+            if (forsnapshot)
+            { // Do nothing
+                return;
+            }
             // put on top-right conner
             g_canvas->fillTriangle(480, 0, 540, 0, 540, 60, 0x0005);
             g_canvas->drawWideLine(480, 0, 540, 60, 0.5, TFT_WHITE);
@@ -731,50 +772,51 @@ void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, c
                     deltaY = 0;
                 }
 
-                // decide the triangle
-                if (g_current_book && g_current_book->getVerticalText() && strcmp(labelpos, "default") == 0)
-                {
-                    // put on bottom-right conner
-                    g_canvas->fillTriangle(0, 0, 60, 0, 0, 60, theme_tri_color);
-                    g_canvas->drawWideLine(60, 0, 0, 60, 0.5, TFT_WHITE);
-
-                    if (isshutdown)
+                if (!forsnapshot)
+                { // 截屏不需要 triangle , 腰封
+                    if (g_current_book && g_current_book->getVerticalText() && strcmp(labelpos, "default") == 0)
                     {
-                        ui_push_image_to_canvas("/spiffs/power-icon.png", 1, 4);
+                        // put on bottom-right conner
+                        g_canvas->fillTriangle(0, 0, 60, 0, 0, 60, theme_tri_color);
+                        g_canvas->drawWideLine(60, 0, 0, 60, 0.5, TFT_WHITE);
+                        if (isshutdown)
+                        {
+                            ui_push_image_to_canvas("/spiffs/power-icon.png", 1, 4);
+                        }
+                        else
+                        {
+                            ui_push_image_to_canvas("/spiffs/lock-icon.png", 1, 4);
+                        }
+                    }
+                    else if (strcmp(labelpos, "top") == 0 && (g_current_book && !g_current_book->getVerticalText()))
+                    {
+                        // put on bottom-right conner
+                        g_canvas->fillTriangle(480, 960, 540, 960, 540, 900, theme_tri_color);
+                        g_canvas->drawWideLine(480, 960, 540, 900, 0.5, TFT_WHITE);
+
+                        if (isshutdown)
+                        {
+                            ui_push_image_to_canvas("/spiffs/power-icon.png", 508, 960 - 35);
+                        }
+                        else
+                        {
+                            ui_push_image_to_canvas("/spiffs/lock-icon.png", 508, 960 - 35);
+                        }
                     }
                     else
                     {
-                        ui_push_image_to_canvas("/spiffs/lock-icon.png", 1, 4);
-                    }
-                }
-                else if (strcmp(labelpos, "top") == 0 && (g_current_book && !g_current_book->getVerticalText()))
-                {
-                    // put on bottom-right conner
-                    g_canvas->fillTriangle(480, 960, 540, 960, 540, 900, theme_tri_color);
-                    g_canvas->drawWideLine(480, 960, 540, 900, 0.5, TFT_WHITE);
+                        // put on top-right conner
+                        g_canvas->fillTriangle(480, 0, 540, 0, 540, 60, theme_tri_color);
+                        g_canvas->drawWideLine(480, 0, 540, 60, 0.5, TFT_WHITE);
 
-                    if (isshutdown)
-                    {
-                        ui_push_image_to_canvas("/spiffs/power-icon.png", 508, 960 - 35);
-                    }
-                    else
-                    {
-                        ui_push_image_to_canvas("/spiffs/lock-icon.png", 508, 960 - 35);
-                    }
-                }
-                else
-                {
-                    // put on top-right conner
-                    g_canvas->fillTriangle(480, 0, 540, 0, 540, 60, theme_tri_color);
-                    g_canvas->drawWideLine(480, 0, 540, 60, 0.5, TFT_WHITE);
-
-                    if (isshutdown)
-                    {
-                        ui_push_image_to_canvas("/spiffs/power-icon.png", 508, 0);
-                    }
-                    else
-                    {
-                        ui_push_image_to_canvas("/spiffs/lock-icon.png", 508, 0);
+                        if (isshutdown)
+                        {
+                            ui_push_image_to_canvas("/spiffs/power-icon.png", 508, 0);
+                        }
+                        else
+                        {
+                            ui_push_image_to_canvas("/spiffs/lock-icon.png", 508, 0);
+                        }
                     }
                 }
             }
@@ -837,6 +879,7 @@ void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, c
             if (g_current_book && g_current_book->getVerticalText())
             {
                 // Draw vertical banner (left strip and vertical digest)
+                if (!forsnapshot)
                 {
                     int vb_basex = 200; // default
                     if (labelpos)
@@ -853,43 +896,46 @@ void show_lockscreen(int16_t area_width, int16_t area_height, float font_size, c
 
                 // Name banner
                 int32_t basey = 820;
-                draw_name_banner(g_canvas, name_with_page, basey, !darktheme, cur_page, total_page);
+
+                draw_name_banner(g_canvas, name_with_page, basey, !darktheme, cur_page, total_page, forsnapshot);
             }
             else
             {
                 /*
-                //                ui_push_image_to_canvas("/spiffs/frame.png", 0, 380 + BOOKMARKOFFSET + deltaY);
-                bin_font_print(name_with_page, 21, 4, 540, 10, 590 + BOOKMARKOFFSET + deltaY, false); // 0.7f * 30 = 21
-                // 文摘刷新
-                bin_font_print(g_current_book->getCurrentDigest().c_str(), 26, 2, 540, 50, 430 + BOOKMARKOFFSET + deltaY, false); // 0.85f * 30 = 25.5 ≈ 26
-                */
+                 //                ui_push_image_to_canvas("/spiffs/frame.png", 0, 380 + BOOKMARKOFFSET + deltaY);
+                 bin_font_print(name_with_page, 21, 4, 540, 10, 590 + BOOKMARKOFFSET + deltaY, false); // 0.7f * 30 = 21
+                 // 文摘刷新
+                 bin_font_print(g_current_book->getCurrentDigest().c_str(), 26, 2, 540, 50, 430 + BOOKMARKOFFSET + deltaY, false); // 0.85f * 30 = 25.5 ≈ 26
+                 */
                 int basey = 382 + BOOKMARKOFFSET + deltaY;
                 int baseh = 160;
+                if (!forsnapshot)
+                {
 
-                // Draw a themed vertical strip and separator lines
-                g_canvas->fillRect(0, basey, 60, baseh, TFT_BLACK);
-                g_canvas->fillRect(0, basey, 540, baseh, theme_strip_bg);
-                g_canvas->drawRect(0, basey, 540, baseh, TFT_BLACK);
+                    // Draw a themed vertical strip and separator lines
+                    g_canvas->fillRect(0, basey, 60, baseh, TFT_BLACK);
+                    g_canvas->fillRect(0, basey, 540, baseh, theme_strip_bg);
+                    g_canvas->drawRect(0, basey, 540, baseh, TFT_BLACK);
 
-                bin_font_print(g_current_book->getCurrentDigest().c_str(), 28, theme_strip_fg, 540, 100, basey + 20, false, g_canvas, TEXT_ALIGN_LEFT, 0, false, true);
+                    bin_font_print(g_current_book->getCurrentDigest().c_str(), 28, theme_strip_fg, 540, 100, basey + 20, false, g_canvas, TEXT_ALIGN_LEFT, 0, false, true);
+                    // head
+                    g_canvas->fillRect(0, basey, 60, baseh, TFT_BLACK);
+                    g_canvas->drawLine(60, basey + 5, 540, basey + 5, theme_strip_fg);
+                    g_canvas->drawLine(60, basey + baseh - 5, 540, baseh + basey - 5, theme_strip_fg);
 
-                // head
-                g_canvas->fillRect(0, basey, 60, baseh, TFT_BLACK);
-                g_canvas->drawLine(60, basey + 5, 540, basey + 5, theme_strip_fg);
-                g_canvas->drawLine(60, basey + baseh - 5, 540, baseh + basey - 5, theme_strip_fg);
+                    g_canvas->drawLine(0, basey + 5, 60, basey + 5, TFT_WHITE);
+                    g_canvas->drawLine(0, basey + baseh - 5, 60, baseh + basey - 5, TFT_WHITE);
 
-                g_canvas->drawLine(0, basey + 5, 60, basey + 5, TFT_WHITE);
-                g_canvas->drawLine(0, basey + baseh - 5, 60, baseh + basey - 5, TFT_WHITE);
-
-                g_canvas->drawCircle(30, basey + baseh / 2, 20, TFT_WHITE);
-                g_canvas->fillCircle(30, basey + baseh / 2, 15, TFT_WHITE);
-                g_canvas->drawWideLine(0, basey + baseh / 2, 60, basey + baseh / 2, 1.5, TFT_WHITE);
-
-                draw_name_banner(g_canvas, name_with_page, basey + 162, false, cur_page, total_page);
+                    g_canvas->drawCircle(30, basey + baseh / 2, 20, TFT_WHITE);
+                    g_canvas->fillCircle(30, basey + baseh / 2, 15, TFT_WHITE);
+                    g_canvas->drawWideLine(0, basey + baseh / 2, 60, basey + baseh / 2, 1.5, TFT_WHITE);
+                }
+                draw_name_banner(g_canvas, name_with_page, basey + 162, false, cur_page, total_page, forsnapshot);
             }
         }
     }
-    bin_font_flush_canvas(false, false, true, RECT); // quality will be reset by the bin flush way!
+    if (!forsnapshot)                                    // 截屏不需要 triangle , 腰封
+        bin_font_flush_canvas(false, false, true, RECT); // quality will be reset by the bin flush way!
 };
 
 void lockscreen_image_cache_invalidate()
