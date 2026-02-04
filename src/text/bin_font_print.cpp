@@ -322,8 +322,10 @@ static bool is_chinese_punctuation(uint32_t unicode)
         unicode == 0x0028 || unicode == 0x0029 ||   // ()
         unicode == 0x0024 || unicode == 0x0040 ||   // $@
         unicode == 0x002D || unicode == 0x005F ||   // -_
-        unicode == 0x2014 || unicode == 0x003D ||   // —=
-        unicode == 0x007E ||                        // ~
+        unicode == 0x2013 || unicode == 0x2014 ||   // –—
+        unicode == 0x2015 || unicode == 0xFF0D ||   // ―－
+        unicode == 0x2500 || unicode == 0x2501 ||   // ─━
+        unicode == 0x003D || unicode == 0x007E ||   // =~
         (unicode >= 0x0030 && unicode <= 0x0039) || // 0-9
         (unicode >= 0x0041 && unicode <= 0x005A) || // A-Z
         (unicode >= 0x0061 && unicode <= 0x007A) || // a-z
