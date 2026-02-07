@@ -47,7 +47,7 @@ enum display_type {
 
 // 统一边距定义
 #define MARGIN_TOP 26
-#define MARGIN_BOTTOM 6
+#define MARGIN_BOTTOM 18
 #define MARGIN_LEFT 27
 #define MARGIN_RIGHT 18
 #define VERTICAL_TOP_DELTA 0
