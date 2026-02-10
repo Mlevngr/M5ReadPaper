@@ -60,14 +60,14 @@ void StateMachineTask::handleTocDisplayState(const SystemMessage_t *msg)
             {
                 // previous page
                 toc_prev_page();
-                show_toc_ui(g_canvas);
+                show_toc_ui(g_canvas, 1);
                 return;
             }
             if (tx > 240 && tx < 450)
             {
                 // next page
                 toc_next_page();
-                show_toc_ui(g_canvas);
+                show_toc_ui(g_canvas, 1);
                 return;
             }
         }
@@ -91,7 +91,7 @@ void StateMachineTask::handleTocDisplayState(const SystemMessage_t *msg)
             if (tx > 250 && tx < 380)
             {
                 // Switch to index display (tags view)
-                show_tag_ui(g_canvas);
+                show_tag_ui(g_canvas, 2);
                 currentState_ = STATE_INDEX_DISPLAY;
                 return;
             }

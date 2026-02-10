@@ -683,7 +683,7 @@ static bool parse_toc_line(const std::string &line, TocEntry &entry)
     return true;
 }
 
-void show_toc_ui(M5Canvas *canvas)
+void show_toc_ui(M5Canvas *canvas, int8_t paging)
 {
     M5Canvas *target = canvas ? canvas : g_canvas;
     if (!target)
@@ -841,6 +841,18 @@ void show_toc_ui(M5Canvas *canvas)
     }
     else
     {
-        bin_font_flush_canvas();
+        if (paging == 1)
+        {
+            bin_font_flush_canvas(false, false, false, NOEFFECT, 0, 40, 450, 880);
+        }
+        else if (paging == 2)
+        {
+
+            bin_font_flush_canvas(false, false, false, NOEFFECT, 0, 0, 450, 960);
+        }
+        else
+        {
+            bin_font_flush_canvas();
+        }
     }
 }

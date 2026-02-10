@@ -12,7 +12,7 @@ extern M5Canvas *g_canvas;
 
 // Draw a left-side 360x800 tag list, 10 rows (each 80px high).
 // Each row shows: <摘要> <百分比>
-void show_tag_ui(M5Canvas *canvas)
+void show_tag_ui(M5Canvas *canvas, int8_t paging)
 {
     M5Canvas *target = canvas ? canvas : g_canvas;
     if (!target)
@@ -127,6 +127,13 @@ void show_tag_ui(M5Canvas *canvas)
     }
     else
     {
-        bin_font_flush_canvas();
+        if (paging == 2)
+        {
+            bin_font_flush_canvas(false,false,false,NOEFFECT,0,0,450,960);
+        }
+        else
+        {
+            bin_font_flush_canvas();
+        }
     }
 }

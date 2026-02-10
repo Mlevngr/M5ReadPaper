@@ -23,7 +23,8 @@ bool fetch_toc_entry(const std::string &book_file_path, size_t toc_index, TocEnt
 // Draw a left-side 450x960 TOC list, 10 rows (each ~86px high).
 // Each row shows: <标题> <百分比>
 // Similar to show_tag_ui but displays TOC entries instead of tags
-void show_toc_ui(M5Canvas *canvas = nullptr);
+// paging : 0 - 全屏刷， 1-刷列表条目部分（翻页） 2- 刷列表部分（用于书签目录跳转）
+void show_toc_ui(M5Canvas *canvas = nullptr, int8_t  paging = 0);
 
 // Warm up TOC cache so the first UI entry is faster
 void toc_prefetch_for_book(const std::string &book_file_path);

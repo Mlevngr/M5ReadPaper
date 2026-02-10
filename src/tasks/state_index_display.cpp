@@ -75,7 +75,7 @@ void StateMachineTask::handleIndexDisplayState(const SystemMessage_t *msg)
                     // Switch to TOC display: request a refresh and show UI
                     toc_refresh = true;
                     // Switch to TOC display
-                    show_toc_ui(g_canvas);
+                    show_toc_ui(g_canvas,2);
                     currentState_ = STATE_TOC_DISPLAY;
                 return;
             }
